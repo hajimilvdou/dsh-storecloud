@@ -63,12 +63,13 @@ export class HttpDataSource implements DataSource {
     return out
   }
 
-  private async get<T>(path: string): Promise<T | null> {
+  private async get<T>(path: string, timeoutMs = 20000): Promise<T | null> {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        // 20s 兜底超时：宿主代理最长 20s×4 次重试，客户端不能无限等待(界面卡死)。
+        // 超时兜底：宿主代理最长 20s×4 次重试，客户端不能无限等待(界面卡死)。
+        // 插件库全量响应可达 2.7MB/15s+（慢服务器），大响应接口用更长超时（见 fetchPlugins）。
         const ctrl = new AbortController()
-        const timer = setTimeout(() => ctrl.abort(), 20000)
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs)
         const res = await this.request(this.baseUrl + path, { headers: this.headers(), signal: ctrl.signal })
         clearTimeout(timer)
         if (!res.ok) return null
@@ -120,7 +121,8 @@ export class HttpDataSource implements DataSource {
 
   async fetchPlugins(since?: string): Promise<Delta<Plugin>> {
     const q = since ? `?since=${encodeURIComponent(since)}` : ''
-    return (await this.get<Delta<Plugin>>(`${API.plugins}${q}`)) ?? { revision: '0', items: [], full: true, tombstones: [] }
+    // 大响应专用超时：全量可达 2.7MB（慢服务器 15s+），默认 20s 会在代理转发开销下超时失败
+    return (await this.get<Delta<Plugin>>(`${API.plugins}${q}`, 45000)) ?? { revision: '0', items: [], full: true, tombstones: [] }
   }
 
   async fetchCombos(since?: string): Promise<Delta<Combo>> {

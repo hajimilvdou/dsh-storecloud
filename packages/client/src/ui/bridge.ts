@@ -965,8 +965,9 @@ export function httpBridge(opts: {
   /**
    * 同步服务端数据（bootstrap 与周期 refresh 共用）：
    * 1. 先恢复本地持久缓存（不阻塞界面）；
-   * 2. manifest 探测离线 → 保留缓存数据，只更新源健康状态；
-   * 3. 在线 → 按缓存 revision 增量拉取（失败全量兜底，仍失败保留缓存）。
+   * 2. 健康探测与 manifest 并行，探测完成立即推送源状态（「我的」页不等数据拉完就显示连接状态）；
+   * 3. 在线 → 数据通道（插件/组合/公告/节点）并行拉取（各接口自带失败兜底，互不影响）；
+   * 4. manifest 探测离线 → 保留缓存数据，只更新源健康状态。
    */
   const load = async () => {
     await restoreSources()
@@ -984,9 +985,12 @@ export function httpBridge(opts: {
       }
     }
     await ledger.load()
-    const health = await probeUrl(activeBase)
+    // 健康探测 + manifest 并行（服务器响应慢时不再串行叠加等待）
+    const [health, m] = await Promise.all([probeUrl(activeBase), source.fetchManifest()])
     baseHealth.set(normUrl(activeBase), { reachable: health.status === 'connected', latency: health.latency })
-    const m = await source.fetchManifest()
+    sources = mergeSources()
+    // 先推送源状态：进入商城后「我的」页尽快显示 connected，无需手动测速
+    notify()
     // manifest 拉取失败（fallback software_version=0.0.0）视为离线：保留缓存数据。
     const offline = m.software_version === '0.0.0'
     if (!offline) {
@@ -997,24 +1001,31 @@ export function httpBridge(opts: {
       trendingSize = m.client_config?.trending_size ?? 20
       features = { trending: m.features?.trending !== false, combos: m.features?.combos !== false, announcements: m.features?.announcements !== false }
       const sinceP = pluginsRevision && pluginsRevision !== m.plugins_revision ? pluginsRevision : undefined
+      const sinceC = combosRevision && combosRevision !== m.combos_revision ? combosRevision : undefined
+      // 数据通道拉取顺序：小响应（组合/公告/节点）先并行 → 组合数据尽快就绪并推送；
+      // 插件库（4500+ 条大响应）最后独占拉取——与任何并发请求同时打慢服务器都会互相拖垮超时。
+      const [cs, annos, nodeList] = await Promise.all([
+        source.fetchCombos(sinceC),
+        source.fetchAnnouncements(),
+        source.listNodes(),
+      ])
+      if (!(cs.full && cs.items.length === 0 && cs.revision === '0')) {
+        combos = applyDelta(combos, cs)
+        combosRevision = cs.revision !== '0' ? cs.revision : m.combos_revision
+      }
+      // 公告：网络返回空且缓存非空时保留缓存（服务器当前无公告是真实状态，两者都接受）。
+      if (annos.length > 0 || announcements.length === 0) {
+        announcements = annos.filter((a) => !dismissedAnnos.has(a.id))
+      }
+      nodeSources = nodeList
+      // 组合/公告先就绪：推送一次（进组合页即可见最新数据，不必等插件库大响应）
+      notify()
       const ps = await source.fetchPlugins(sinceP)
       // 增量/全量失败时返回 fallback（full + 空 items + revision '0'）：保留缓存数据
       if (!(ps.full && ps.items.length === 0 && ps.revision === '0')) {
         plugins = applyDelta(plugins, ps)
         pluginsRevision = ps.revision !== '0' ? ps.revision : m.plugins_revision
       }
-      const sinceC = combosRevision && combosRevision !== m.combos_revision ? combosRevision : undefined
-      const cs = await source.fetchCombos(sinceC)
-      if (!(cs.full && cs.items.length === 0 && cs.revision === '0')) {
-        combos = applyDelta(combos, cs)
-        combosRevision = cs.revision !== '0' ? cs.revision : m.combos_revision
-      }
-      // 公告：网络返回空且缓存非空时保留缓存（服务器当前无公告是真实状态，两者都接受）。
-      const annos = await source.fetchAnnouncements()
-      if (annos.length > 0 || announcements.length === 0) {
-        announcements = annos.filter((a) => !dismissedAnnos.has(a.id))
-      }
-      nodeSources = await source.listNodes()
     }
     sources = mergeSources()
     await fetchCloud()
