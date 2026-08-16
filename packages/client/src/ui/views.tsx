@@ -343,7 +343,8 @@ export function ComboView(props: {
         c.members.some((m) => m.pkg.toLowerCase().includes(topKw))),
   )
   const kw = q.trim().toLowerCase()
-  // 候选 = 插件库全部插件（优先，未安装也可选）+ 已安装的库外插件（编辑老组合时保留）。
+  // 候选 = 插件库全部插件（优先，未安装也可选）+ 已安装的库外插件 + 已选但两者都不是的存量成员
+  // （库外未安装的旧组合成员：联邦/历史数据可能产生，补占位项保证编辑不丢项、可取消、保存校验一致）。
   // 每项带作者与仓库地址（库中有则展示，可点击跳转）。
   const pickable = [
     ...props.plugins.map((p) => ({
@@ -357,6 +358,9 @@ export function ComboView(props: {
     ...allInstalled
       .filter((id) => !libIds.has(id))
       .map((id) => ({ id, name: id, inLib: false, version: props.installed[id], author: undefined, repoUrl: undefined })),
+    ...Object.keys(sel)
+      .filter((id) => sel[id] && !libIds.has(id) && !allInstalled.includes(id))
+      .map((id) => ({ id, name: id, inLib: false, version: null, author: undefined, repoUrl: undefined })),
   ]
   // 搜索：名称或作者
   const filtered = pickable.filter((it) => !kw || it.name.toLowerCase().includes(kw) || (it.author ?? '').toLowerCase().includes(kw))

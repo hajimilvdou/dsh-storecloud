@@ -1372,6 +1372,8 @@ export function httpBridge(opts: {
       }
       const created = (await res.json()) as Combo
       combos = [...combos, created]
+      // 组合已变更：重置在线刷新窗口，让随后的 refreshCombos 必定向服务器拉取权威数据
+      combosFetchedAt = 0
       return combos
     },
     async updateCombo(id, name, desc, members) {
@@ -1399,6 +1401,7 @@ export function httpBridge(opts: {
       }
       const updated = (await res.json()) as Combo
       combos = combos.map((c) => (c.id === id ? updated : c))
+      combosFetchedAt = 0
       return combos
     },
     async removeCombo(id) {
@@ -1425,6 +1428,7 @@ export function httpBridge(opts: {
       }
       const body = (await res.json()) as { combos?: Combo[] }
       if (body.combos) combos = body.combos
+      combosFetchedAt = 0
       return combos
     },
     async reportMissing(pkg, repoUrl, version) {
@@ -1519,6 +1523,7 @@ export function httpBridge(opts: {
         }
       }
       await syncCloud()
+      await persistSubs()
       if (failures.length > 0) {
         throw new Error(`部分组合成员恢复失败（${failures.length}）：\n${failures.slice(0, 3).join('\n')}`)
       }
