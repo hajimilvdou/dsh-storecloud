@@ -38,6 +38,7 @@
     "build": "npm run build --workspaces && node scripts/build.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present && node --check lib/index.js && node --check lib/client.js",
     "smoke": "node smoke-test.mjs",
+    "test:http": "node http-bridge-test.mjs",
     "verify:client": "node scripts/verify-client.mjs",
     "pack": "npm pack"
   },
