@@ -1,0 +1,11 @@
+# dsh-storecloud bundle 层：插入插件商城入口行。
+# host 半（lib/index.js）注册 /dsh-store 路由（预览页 / API 反代 / 本地安装 RPC）；
+# client 半（lib/client.js）经 dsh.client 声明进入 Web 启动图，注册三处界面槽位。
+# 需要改服务器地址等配置时，在 profile 的 cordis.patch.yml 追加：
+#   - id: dsh-storecloud
+#     config:
+#       serverUrl: https://你的服务器
+- insert:
+    - id: dsh-storecloud
+      name: dsh-storecloud
+      config: {}

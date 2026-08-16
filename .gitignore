@@ -1,0 +1,23 @@
+# dependencies / build
+node_modules/
+.npm-cache/
+dist/
+*.tsbuildinfo
+
+# npm pack output
+*.tgz
+
+# environment / secrets
+.env
+.env.local
+*.pem
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

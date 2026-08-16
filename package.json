@@ -1,0 +1,52 @@
+{
+  "name": "dsh-storecloud",
+  "version": "0.1.0",
+  "description": "DSH 插件商城 · 用户端（dsh-store 客户端）：悬浮球 / 设置页 / 会话视图三入口 + 本地安装器 RPC + 反向代理桥。配套服务端见 dsh-store-server。",
+  "type": "commonjs",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "preview",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "pack": "npm pack",
+    "typecheck": "node --check lib/index.js && node --check lib/client.js"
+  },
+  "keywords": [
+    "dsh",
+    "cordis",
+    "plugin",
+    "store",
+    "marketplace",
+    "plugin-store",
+    "deepseek"
+  ],
+  "license": "BSD-3-Clause",
+  "devDependencies": {
+    "esbuild": "^0.23.0"
+  }
+}
