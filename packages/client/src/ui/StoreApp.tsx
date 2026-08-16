@@ -109,8 +109,8 @@ export function StoreApp(props: {
   const [authBusy, setAuthBusy] = useState(false)
   /** 组合一键安装时标记为手动安装的成员：弹窗逐个打开插件页面。 */
   const [manualList, setManualList] = useState<ManualInstallItem[] | null>(null)
-  /** 三处放置位置能力清单(壳侧广播)：fab=悬浮球 / section=设置页 / header=会话头部。 */
-  const [storeLocs, setStoreLocs] = useState<{ fab?: boolean; section?: boolean; header?: boolean }>({})
+  /** 放置位置能力清单(壳侧广播)：section=设置页 / header=会话头部。 */
+  const [storeLocs, setStoreLocs] = useState<{ section?: boolean; header?: boolean }>({})
   /** 登录结果全局横幅（成功/失败都显示几秒后消失，任何页面可见，不依赖抽屉开关）。 */
   const [authNotice, setAuthNotice] = useState<{ ok: boolean; msg: string } | null>(null)
 
@@ -170,12 +170,12 @@ export function StoreApp(props: {
   // GitHub OAuth 自动取 token：授权窗口完成回调后 postMessage 回传，无需手动复制粘贴。
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
-      const d = (e.data ?? null) as { type?: string; token?: string; locs?: { fab?: boolean; section?: boolean; header?: boolean } } | null
+      const d = (e.data ?? null) as { type?: string; token?: string; locs?: { section?: boolean; header?: boolean } } | null
       if (d && d.type === 'dsh-store-auth' && typeof d.token === 'string' && d.token) {
         // 自动登录路径：doSetToken 内部负责全局横幅（登录中/成功/失败），不依赖抽屉是否打开。
         void doSetToken(d.token)
       }
-      // 壳侧广播的三处放置位置能力清单(打包版不适配的位置会缺失/为 false)
+      // 壳侧广播的放置位置能力清单(打包版不适配的位置会缺失/为 false)
       if (d && d.type === 'dsh-store-locs' && d.locs) {
         setStoreLocs(d.locs)
       }
@@ -370,8 +370,8 @@ export function StoreApp(props: {
       if (loggedIn) refreshCloud()
     }).catch(function (e) { window.alert(String((e && e.message) || e)) })
   const doRemoveAnno = (id: string) => void props.bridge.removeAnnouncement(id).then(setAnnouncements)
-  /** 切换商城放置位置(悬浮球/设置页/会话头部)：写 localStorage + 通知壳侧即时生效。 */
-  const doSetLoc = (key: 'fab' | 'section' | 'header', on: boolean) => {
+  /** 切换商城放置位置(设置页/会话头部；悬浮球已移除)：写 localStorage + 通知壳侧即时生效。 */
+  const doSetLoc = (key: 'section' | 'header', on: boolean) => {
     try {
       localStorage.setItem('dsh_store_loc_' + key, on ? '1' : '0')
     } catch {
@@ -433,10 +433,10 @@ export function StoreApp(props: {
       const s = await props.bridge.refresh()
       applyState(s)
       if (!s.account.login) {
-        if (props.tokenStore) props.tokenStore.current = null
-        await props.bridge.refresh().then(applyState)
-        setAuthNotice({ ok: false, msg: '登录失败：token 无效或已过期，请重新授权' })
-        return { ok: false, message: '登录失败：token 无效或已过期，请重新授权' }
+        // token 已写入本地：若服务器确认无效（401）bridge 会自动清 token；
+        // 这里不再主动清，避免服务器暂时不可达时误删登录凭证。
+        setAuthNotice({ ok: false, msg: '登录尚未生效：服务器暂时不可达或 token 无效。token 已保留，连接恢复后自动登录；若持续失败请重新授权' })
+        return { ok: false, message: '登录尚未生效：token 已保留，连接恢复后自动重试' }
       }
       setAuthNotice({ ok: true, msg: `✅ 已通过 GitHub 登录：${s.account.login}，云端清单已加载` })
       return { ok: true, message: `已通过 GitHub 登录：${s.account.login}，云端清单已加载` }

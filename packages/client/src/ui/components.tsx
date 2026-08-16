@@ -559,10 +559,10 @@ export function AccountDrawer(props: {
   authBusy?: boolean
   /** 登录结果（成功/失败）全局横幅内容：抽屉内也同步展示,避免被浮层遮挡。 */
   authNotice?: { ok: boolean; msg: string } | null
-  /** 三处放置位置能力清单(壳侧广播)：fab=悬浮球 / section=设置页 / header=会话头部。 */
-  storeLocs?: { fab?: boolean; section?: boolean; header?: boolean }
+  /** 放置位置能力清单(壳侧广播)：section=设置页 / header=会话头部。 */
+  storeLocs?: { section?: boolean; header?: boolean }
   /** 切换放置位置(写 localStorage + 通知壳侧)。 */
-  onSetLoc?: (key: 'fab' | 'section' | 'header', on: boolean) => void
+  onSetLoc?: (key: 'section' | 'header', on: boolean) => void
   serverUrl?: string
   /** 组合/数据更新频率（分钟，服务端配置下发，客户端按此心跳拉取）。 */
   heartbeatMin?: number
@@ -593,10 +593,9 @@ export function AccountDrawer(props: {
     />
   )
 
-  // 商城放置位置切换(三个位置：悬浮球/设置页/会话头部)：
+  // 商城放置位置切换(两个位置：设置页/会话头部；悬浮球已移除)：
   // 能力清单缺失/为 false = 当前应用(打包版可能裁剪该位置)不适配 → 置灰并提醒。
-  const locItems: Array<{ key: 'fab' | 'section' | 'header'; label: string; hint: string }> = [
-    { key: 'fab', label: '悬浮球', hint: '右下角可拖动悬浮球' },
+  const locItems: Array<{ key: 'section' | 'header'; label: string; hint: string }> = [
     { key: 'section', label: '设置页', hint: '左下角设置中(默认)' },
     { key: 'header', label: '会话头部', hint: '对话/轨迹上方大页面' },
   ]

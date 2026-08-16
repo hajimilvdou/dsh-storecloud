@@ -40,7 +40,7 @@
 
 ### 其他亮点
 
-- **三处入口**：🧩 悬浮球（可拖动/缩放）+ 设置页区块 + 会话视图 Tab，每个入口可在「我的」页独立开关；
+- **双入口**：⚙️ 设置页区块 + 📑 会话视图 Tab，每个入口可在「我的」页独立开关（悬浮球入口已移除，测试版保留在 `dsh-store-shell/`）；
 - **页内直接安装**：浏览到的插件点「安装」即执行真实的 `dsh plugin add`（pnpm 安装 + 自动入组合层），安装/卸载/已装清单实时核对本地真实状态；
 - **零依赖客户端半**：走 DSH 标准 client-modules 通道（`dsh.client` 声明），不捆绑 React、不依赖框架内部 API，随 DSH 主版本长期兼容；
 - **无缝反向代理桥**：`/dsh-store/api` 同源转发（自动携带登录态/访问口令/匿名凭证），OAuth 登录后 token 自动回传，无跨域无复制粘贴；通用转发带 SSRF 防护；
@@ -62,7 +62,7 @@ dsh plugin --profile web add github:hajimilvdou/dsh-storecloud
 cd ~/.dsh/profiles/web && pnpm add dsh-storecloud
 ```
 
-装完 **重启 DSH web 进程**（bundle 层在启动时装配）。重启后：右下角出现 🧩 悬浮球；设置页出现「🧩 插件商城」区块；会话头部出现「🧩 插件商城」视图（排最右）。
+装完 **重启 DSH web 进程**（bundle 层在启动时装配）。重启后：设置页出现「🧩 插件商城」区块；会话头部出现「🧩 插件商城」视图（排最右）。
 
 卸载：`dsh plugin --profile web remove dsh-storecloud`
 
@@ -75,7 +75,7 @@ cd ~/.dsh/profiles/web && pnpm add dsh-storecloud
 ### 首次使用（三步）
 
 1. 按上面命令安装并**重启 DSH web 进程**；
-2. 打开商城：右下角 🧩 悬浮球，或设置页「🧩 插件商城」，或会话头部「🧩 插件商城」Tab；
+2. 打开商城：设置页「🧩 插件商城」区块，或会话头部「🧩 插件商城」Tab；
 3. 等待插件库首次同步（本地缓存秒开，全量数据后台拉取，之后打开即用）。
 
 ### 登录与登录 token
@@ -120,7 +120,7 @@ dsh-storecloud/
 ├── docs/                    # 设计文档（v3 ~ v3.7）与界面原型
 ├── lib/
 │   ├── index.js             # 产物 · host 半（Node cordis 插件）：路由/反代/RPC/静态资源
-│   └── client.js            # 产物 · client 半（浏览器）：三入口槽位（零依赖）
+│   └── client.js            # 产物 · client 半（浏览器）：双入口槽位（零依赖）
 ├── preview/                 # 产物 · 商城 UI 静态资源（由 packages 构建）
 ├── cordis.patch.yml         # bundle 层：插入本插件 loader 行
 ├── scripts/
@@ -185,6 +185,6 @@ DSH 插件商店的服务端通过 GitHub **topic 自动收录**插件仓库，�
 
 ## 常见问题
 
-- **装完没有悬浮球？** 确认重启了 web 进程；或在浏览器设置页 →「插件管理」检查 `dsh-storecloud` 状态。
+- **装完看不到商城？** 确认重启了 web 进程；或在浏览器设置页 →「插件管理」检查 `dsh-storecloud` 状态。
 - **连不上服务器？** 默认服务器需可访问；页面右上角「我的」可查看连接状态，`?server=` 可临时切换。
 - **本地安装按钮报错？** 安装器需要本机 `dsh` CLI 可达（`~/.dsh/profiles/node_modules/@deepseek-ai/dsh` 或 PATH）；服务器需放行对应插件条目。

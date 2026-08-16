@@ -343,14 +343,28 @@ export function ComboView(props: {
         c.members.some((m) => m.pkg.toLowerCase().includes(topKw))),
   )
   const kw = q.trim().toLowerCase()
-  const pickable = allInstalled
-    .map((id) => {
-      const p = props.plugins.find((x) => x.id === id)
-      return { id, name: p?.name ?? id, inLib: !!p, version: props.installed[id] }
-    })
-    .filter((it) => !kw || it.name.toLowerCase().includes(kw))
+  // 候选 = 插件库全部插件（优先，未安装也可选）+ 已安装的库外插件（编辑老组合时保留）。
+  // 每项带作者与仓库地址（库中有则展示，可点击跳转）。
+  const pickable = [
+    ...props.plugins.map((p) => ({
+      id: p.id,
+      name: p.name,
+      inLib: true,
+      version: props.installed[p.id] ?? null,
+      author: p.author,
+      repoUrl: p.repo_url,
+    })),
+    ...allInstalled
+      .filter((id) => !libIds.has(id))
+      .map((id) => ({ id, name: id, inLib: false, version: props.installed[id], author: undefined, repoUrl: undefined })),
+  ]
+  // 搜索：名称或作者
+  const filtered = pickable.filter((it) => !kw || it.name.toLowerCase().includes(kw) || (it.author ?? '').toLowerCase().includes(kw))
+  // 渲染上限：库内 3000+ 条全渲染会卡；已选中的成员始终保留在可见列表（编辑不丢项）。
+  const VISIBLE_CAP = 150
+  const visible = [...filtered.slice(0, VISIBLE_CAP), ...filtered.slice(VISIBLE_CAP).filter((it) => sel[it.id])]
   const chosenCount = Object.values(sel).filter(Boolean).length
-  const allChecked = pickable.length > 0 && pickable.every((it) => sel[it.id])
+  const allChecked = visible.length > 0 && visible.every((it) => sel[it.id])
 
   const openForm = () => {
     if (!props.loggedIn) {
@@ -375,8 +389,8 @@ export function ComboView(props: {
   const toggle = (id: string) => setSel({ ...sel, [id]: !sel[id] })
   const toggleAll = () => {
     const nd = { ...sel }
-    if (allChecked) pickable.forEach((it) => { delete nd[it.id] })
-    else pickable.forEach((it) => { nd[it.id] = true })
+    if (allChecked) visible.forEach((it) => { delete nd[it.id] })
+    else visible.forEach((it) => { nd[it.id] = true })
     setSel(nd)
   }
   const publish = () => {
@@ -438,6 +452,10 @@ export function ComboView(props: {
             <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '手动安装：需自行打开插件页面安装' : '一键安装'}>
               {m.install_mode === 'manual' ? '✋ 手动' : '⚡ 自动'}
             </span>
+            {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
+            {p?.repo_url ? (
+              <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" title={p.repo_url}>🔗 仓库</a>
+            ) : null}
             {props.installed[m.pkg] ? (
               <span className="dshs-compat">已安装 v{props.installed[m.pkg]}</span>
             ) : (
@@ -553,19 +571,19 @@ export function ComboView(props: {
                 <input className="dshs-input" placeholder="一句话简介（≤200字）" value={desc} onChange={(e) => setDesc(e.target.value)} />
               </div>
               <div className="dshs-sec" style={{ marginTop: 4 }}>
-                🧩 从你的插件中选择
-                <span>{allInstalled.length} 个已安装</span>
+                🧩 选择组合成员（插件库优先）
+                <span>{props.plugins.length} 个库内插件</span>
               </div>
               <div className="dshs-frow">
-                <input className="dshs-input" placeholder="搜索你的插件…" value={q} onChange={(e) => setQ(e.target.value)} />
+                <input className="dshs-input" placeholder="搜索插件名 / 作者…" value={q} onChange={(e) => setQ(e.target.value)} />
               </div>
               <div className="dshs-mrow" style={{ marginBottom: 6 }}>
                 <button className="dshs-abtn" onClick={toggleAll}>{allChecked ? '取消全选' : '☑ 一键全选'}</button>
-                <span className="dshs-compat" style={{ marginLeft: 0 }}>已选 {chosenCount} / {allInstalled.length}</span>
+                <span className="dshs-compat" style={{ marginLeft: 0 }}>已选 {chosenCount} / 库内 {props.plugins.length}</span>
               </div>
-              <div className="dshs-subnote" style={{ marginBottom: 6 }}>安装方式：⚡ 自动 = 一键下载直接安装；✋ 手动 = 组内其他插件直接装，该插件打开页面由你自行安装。</div>
-              {pickable.length ? (
-                pickable.map((it) => {
+              <div className="dshs-subnote" style={{ marginBottom: 6 }}>插件库中的插件优先展示（未安装也可选），带 👤 作者与 🔗 仓库链接；安装方式：⚡ 自动 = 一键下载直接安装；✋ 手动 = 组内其他插件直接装，该插件打开页面由你自行安装。</div>
+              {visible.length ? (
+                visible.map((it) => {
                   const on = !!sel[it.id]
                   const mode = modes[it.id] ?? 'auto'
                   return (
@@ -573,13 +591,17 @@ export function ComboView(props: {
                       className={'dshs-pick' + (on ? ' on' : '')}
                       key={it.id}
                       onClick={(e) => {
-                        if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'BUTTON') toggle(it.id)
+                        if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'BUTTON' && (e.target as HTMLElement).tagName !== 'A') toggle(it.id)
                       }}
                     >
                       <input type="checkbox" checked={on} onChange={() => toggle(it.id)} />
                       <span className="dshs-nm" style={{ fontWeight: 600 }}>{it.name}</span>
-                      <span className="dshs-compat" style={{ marginLeft: 0 }}>v{it.version}</span>
+                      <span className="dshs-compat" style={{ marginLeft: 0 }}>{it.version ? `v${it.version}` : '未安装'}</span>
                       {it.inLib ? <span className="dshs-lib ok">在库 ✓</span> : <span className="dshs-lib warn">库中没有 ⚠</span>}
+                      {it.inLib && it.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {it.author}</span> : null}
+                      {it.inLib && it.repoUrl ? (
+                        <a className="dshs-lk" href={it.repoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={it.repoUrl}>🔗 仓库</a>
+                      ) : null}
                       {on ? (
                         <span className="dshs-mode" onClick={(e) => e.stopPropagation()}>
                           <button className={'dshs-mode-btn' + (mode === 'auto' ? ' on' : '')} onClick={() => setModes({ ...modes, [it.id]: 'auto' })}>⚡ 自动</button>
@@ -590,8 +612,11 @@ export function ComboView(props: {
                   )
                 })
               ) : (
-                <div className="dshs-empty">{kw ? '你的已装插件中没有匹配项' : '尚未安装任何插件'}</div>
+                <div className="dshs-empty">{kw ? '没有匹配的插件（试试搜作者名）' : '插件库为空'}</div>
               )}
+              {filtered.length > VISIBLE_CAP ? (
+                <div className="dshs-subnote" style={{ marginTop: 6 }}>仅显示前 {VISIBLE_CAP} 条（已选中的成员不受此限），用搜索精确定位。</div>
+              ) : null}
             </div>
             {err ? (
               <div className="dshs-notif" style={{ borderLeftColor: 'var(--danger)' }}>

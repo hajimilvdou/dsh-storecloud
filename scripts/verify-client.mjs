@@ -47,7 +47,7 @@ const fakeSlots = {
 }
 const applied = mod.apply({ get: (k) => (k === 'slots' ? fakeSlots : undefined), effect: (fn) => fn() })
 
-if (registered.length !== 3) { console.error('FAIL: 槽位注册数 != 3 ->', registered.length); process.exit(1) }
+if (registered.length !== 2) { console.error('FAIL: 槽位注册数 != 2（预期设置页 + 会话视图，悬浮球已移除）->', registered.length); process.exit(1) }
 const kinds = registered.map((r) => r.opts.name).sort()
 console.log('槽位注册:', kinds.join(', '))
 

@@ -687,7 +687,14 @@ export function httpBridge(opts: {
     }
     try {
       const res = await dataFetch(currentBase() + API.meInstalls, { headers: authHeaders() })
-      authValid = res.ok
+      // 登录有效性只由 401/403（token 被拒）决定：网络/服务器暂时故障（502/500/429/超时）
+      // 不清登录态、不清 token，避免“回对话再进商城”因一次抖动就掉线。
+      if (res.status === 401 || res.status === 403) {
+        authValid = false
+        if (opts.tokenStore) opts.tokenStore.current = null
+        return
+      }
+      authValid = true
       if (!res.ok) return
       const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo'; version: string }>
       cloud = {
@@ -695,7 +702,7 @@ export function httpBridge(opts: {
         combos: [...new Set(list.filter((i) => i.type === 'combo').map((i) => i.target))],
       }
     } catch {
-      authValid = false
+      // 网络异常：保留登录态（token 未失效），连接恢复后自动续上
     }
   }
 
@@ -761,7 +768,13 @@ export function httpBridge(opts: {
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ installs: body }),
       })
-      authValid = res.ok
+      // 同 fetchCloud：只有 401/403 才算登录失效；暂时故障不清登录态
+      if (res.status === 401 || res.status === 403) {
+        authValid = false
+        if (opts.tokenStore) opts.tokenStore.current = null
+        return cloud
+      }
+      authValid = true
       if (res.ok) {
         const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo'; version: string }>
         cloud = {
@@ -1056,6 +1069,14 @@ export function httpBridge(opts: {
       // 先恢复本地自定义源/主源（幂等），让"我的 → 服务器源"立即有数据。
       await restoreSources()
       await readCache()
+      // 乐观登录恢复：本地存在可解码的 token 即先恢复登录态（iframe 重建/切页回来不闪烁、不掉线），
+      // 后台 load 会向服务器校验；只有服务器明确 401/403 才真正登出并清 token。
+      if (!authValid) {
+        const t = currentToken()
+        if (t && (decodeJwt(t) ?? (t.startsWith('mock-') ? { login: t.slice('mock-'.length) } : null))) {
+          authValid = true
+        }
+      }
       if (!loadStarted) {
         loadStarted = true
         loadPromise = load()
