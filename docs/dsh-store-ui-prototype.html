@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DSH 插件商城 · 双端界面原型 v3</title>
+<style>
+/* ============ 全局主题变量 ============ */
+:root{
+  --brand1:#6a5cff; --brand2:#00c2a8;
+  --gold:#f5a623; --up:#2ea043; --danger:#ff6b6b;
+}
+[data-theme="dark"]{
+  --bg:#0d1117; --bg2:#161b22; --bg3:#1c2330; --line:#2b3340;
+  --tx:#e6edf3; --tx2:#8b98a5; --card:#161b22; --hover:#1f2630;
+}
+[data-theme="light"]{
+  --bg:#f2f4f8; --bg2:#ffffff; --bg3:#eef1f6; --line:#d8dee8;
+  --tx:#1c2330; --tx2:#5b6675; --card:#ffffff; --hover:#f0f3f8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#232a35;color:#e6edf3;min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+/* ============ 顶部原型切换 ============ */
+.proto-bar{display:flex;align-items:center;gap:12px;padding:10px 18px;background:#171c26;border-bottom:1px solid #2b3340;position:sticky;top:0;z-index:99}
+.proto-bar b{font-size:14px}
+.proto-bar .tag{font-size:11px;color:#8b98a5;border:1px solid #2b3340;padding:2px 8px;border-radius:10px}
+.ptab{padding:6px 16px;border-radius:8px;font-size:13px;color:#8b98a5}
+.ptab.on{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;font-weight:600}
+
+/* ============ 客户端视图 ============ */
+.mode-note{display:flex;gap:10px;align-items:center;padding:10px 18px;font-size:12.5px;color:#9aa7b8;background:#1a2130;border-bottom:1px dashed #2b3340}
+.mode-note .mbtn{padding:4px 12px;border:1px solid #3a4456;border-radius:7px;font-size:12px;color:#c8d3e0}
+.mode-note .mbtn.on{border-color:var(--brand2);color:var(--brand2)}
+
+.stage{position:relative;height:calc(100vh - 108px);min-height:620px;overflow:hidden;transition:.3s}
+.stage[data-theme="dark"]{background:var(--bg)}
+.stage[data-theme="light"]{background:var(--bg)}
+/* 模拟 dsh WebUI 背景 */
+.mock-ui{position:absolute;inset:0;padding:18px;color:var(--tx2);font-size:13px}
+.mock-top{height:38px;border:1px solid var(--line);border-radius:9px;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--bg2)}
+.mock-top i{width:9px;height:9px;border-radius:50%;background:#3a4456;display:inline-block}
+.mock-body{display:flex;gap:12px;margin-top:12px;height:calc(100% - 50px)}
+.mock-side{width:180px;border:1px solid var(--line);border-radius:9px;background:var(--bg2);padding:12px;font-size:12px;line-height:2.1}
+.mock-main{flex:1;border:1px solid var(--line);border-radius:9px;background:var(--bg2);padding:16px;font-size:12.5px;line-height:2}
+.mock-hint{opacity:.55}
+
+/* 漂浮球 */
+.fab{position:absolute;right:26px;bottom:26px;width:56px;height:56px;border-radius:50%;
+  background:linear-gradient(135deg,var(--brand1),var(--brand2));display:flex;align-items:center;justify-content:center;
+  font-size:24px;cursor:pointer;box-shadow:0 6px 22px rgba(106,92,255,.45);transition:.2s;z-index:20;user-select:none}
+.fab:hover{transform:scale(1.08)}
+.fab .dot{position:absolute;top:-2px;right:-2px;min-width:20px;height:20px;border-radius:10px;background:var(--danger);
+  color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+
+/* 面板窗口（可调大小） */
+.panel{position:absolute;right:26px;bottom:94px;width:400px;height:600px;min-width:360px;min-height:480px;max-width:720px;max-height:900px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5);
+  display:none;flex-direction:column;overflow:hidden;resize:both;z-index:19;color:var(--tx)}
+.panel.open{display:flex}
+.p-top{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--bg2)}
+.p-top .logo{font-weight:700;font-size:14px;white-space:nowrap}
+.p-search{flex:1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:5px 9px;gap:6px}
+.p-search input{flex:1;background:none;border:none;outline:none;color:var(--tx);font-size:12.5px;min-width:40px}
+.p-ico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx2);flex:none}
+.p-ico:hover{background:var(--hover);color:var(--tx)}
+.p-tabs{display:flex;border-bottom:1px solid var(--line);background:var(--bg2)}
+.p-tabs button{flex:1;padding:9px 0;font-size:12.5px;color:var(--tx2);border-bottom:2px solid transparent}
+.p-tabs button.on{color:var(--tx);font-weight:600;border-bottom-color:var(--brand2)}
+.p-body{flex:1;overflow-y:auto;padding:12px}
+.p-body::-webkit-scrollbar{width:5px}.p-body::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.sec-title{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:700;margin:2px 0 8px;color:var(--tx)}
+.sec-title span{font-size:11px;color:var(--tx2);font-weight:400}
+
+/* 横滑 Top20 */
+.hscroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
+.hscroll::-webkit-scrollbar{height:5px}.hscroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.tcard{flex:0 0 200px;scroll-snap-align:start;background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:5px}
+.tcard:hover{border-color:var(--brand2)}
+.tcard .rk{font-size:11px;font-weight:800;color:var(--brand2)}
+.tcard .nm{font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcard .ds{font-size:11.5px;color:var(--tx2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px}
+.mrow{display:flex;align-items:center;gap:9px;font-size:11.5px;margin-top:auto}
+.mrow .st{color:var(--gold)} .mrow .dl{color:var(--up)} .mrow .lk{color:var(--brand1)}
+[data-theme="light"] .mrow .lk{color:#5a48e8}
+.ibtn{margin-left:auto;background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;font-size:11px;padding:3px 10px;border-radius:6px;white-space:nowrap}
+
+/* 纵向卡片 */
+.vcard{background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:9px}
+.vcard:hover{border-color:var(--brand2)}
+.vcard .l1{display:flex;align-items:center;gap:7px}
+.vcard .nm{font-size:13.5px;font-weight:700;color:var(--tx)}
+.badge{font-size:10px;padding:1.5px 7px;border-radius:8px;border:1px solid var(--line);color:var(--tx2);white-space:nowrap}
+.badge.of{border-color:rgba(0,194,168,.5);color:var(--brand2)}
+.badge.cm{border-color:rgba(245,166,35,.5);color:var(--gold)}
+.compat{font-size:10.5px;color:var(--tx2);margin-left:auto;white-space:nowrap}
+.vcard .ds{font-size:12px;color:var(--tx2);line-height:1.55;margin:5px 0 7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.empty{padding:26px;text-align:center;color:var(--tx2);font-size:12.5px}
+
+/* 公告抽屉 */
+.drawer{position:absolute;top:0;right:-100%;width:82%;height:100%;background:var(--bg2);border-left:1px solid var(--line);
+  transition:right .28s;z-index:25;display:flex;flex-direction:column;color:var(--tx)}
+.drawer.open{right:0}
+.drawer .dh{display:flex;align-items:center;padding:12px;border-bottom:1px solid var(--line);font-weight:700;font-size:13.5px}
+.drawer .dh button{margin-left:auto;color:var(--tx2);font-size:16px}
+.anno{padding:11px 12px;border-bottom:1px solid var(--line)}
+.anno .t{font-size:13px;font-weight:600;display:flex;gap:7px;align-items:center}
+.anno .lv{font-size:10px;padding:1px 7px;border-radius:8px}
+.anno .lv.imp{background:rgba(255,107,107,.15);color:var(--danger)}
+.anno .lv.inf{background:rgba(0,194,168,.12);color:var(--brand2)}
+.anno .c{font-size:12px;color:var(--tx2);margin-top:5px;line-height:1.6}
+.anno .d{font-size:10.5px;color:var(--tx2);margin-top:5px;opacity:.7}
+
+/* 地址模式 */
+.addr{display:none;position:absolute;inset:26px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;overflow:hidden;flex-direction:column;color:var(--tx)}
+.stage.addr-on .addr{display:flex}
+.stage.addr-on .mock-ui,.stage.addr-on .fab,.stage.addr-on .panel{display:none}
+.a-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:12px;color:var(--tx2)}
+.a-url{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--brand2)}
+.a-guide{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(106,92,255,.1);border-bottom:1px solid rgba(106,92,255,.35);font-size:12.5px;color:var(--tx);line-height:1.6}
+.a-guide button{flex:none;background:var(--bg3);border:1px solid var(--line);border-radius:7px;padding:5px 12px;font-size:12px;color:var(--tx)}
+.a-guide button:hover{border-color:var(--brand2);color:var(--brand2)}
+.a-body{flex:1;display:flex;align-items:center;justify-content:center;color:var(--tx2);font-size:13px}
+
+/* ============ 管理端视图 ============ */
+#view-admin{display:none;height:calc(100vh - 57px);background:var(--bg);color:var(--tx)}
+#view-admin[data-theme="dark"]{--bg:#0d1117;--bg2:#161b22;--bg3:#1c2330;--line:#2b3340;--tx:#e6edf3;--tx2:#8b98a5;--card:#161b22;--hover:#1f2630}
+.admin-wrap{display:flex;height:100%}
+.a-nav{width:196px;background:var(--bg2);border-right:1px solid var(--line);padding:14px 10px;flex:none}
+.a-nav .nl{font-size:13px;font-weight:700;padding:4px 10px 12px;color:var(--tx)}
+.a-nav button{display:flex;width:100%;text-align:left;padding:9px 12px;border-radius:8px;font-size:13px;color:var(--tx2);margin-bottom:2px;gap:8px}
+.a-nav button.on{background:linear-gradient(135deg,rgba(106,92,255,.18),rgba(0,194,168,.14));color:var(--tx);font-weight:600}
+.a-main{flex:1;overflow-y:auto;padding:18px 22px}
+.a-title{font-size:17px;font-weight:700;margin-bottom:14px}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:14px}
+.stat .v{font-size:23px;font-weight:800;color:var(--tx)}
+.stat .k{font-size:12px;color:var(--tx2);margin-top:3px}
+.stat .s{font-size:11px;margin-top:5px;color:var(--up)}
+.a-card{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:14px}
+.a-card h4{font-size:13.5px;margin-bottom:10px;color:var(--tx)}
+details.a-card{padding:0;overflow:hidden}
+details.a-card>summary{padding:13px 15px;font-size:13.5px;font-weight:700;color:var(--tx);cursor:pointer;list-style:none}
+details.a-card>summary::-webkit-details-marker{display:none}
+details.a-card[open]>summary{border-bottom:1px solid var(--line)}
+.scan-help-body{padding:13px 15px 14px;font-size:12.5px;color:var(--tx2);line-height:1.75}
+.scan-help-body p{color:var(--tx);font-weight:700;margin:10px 0 4px}
+.scan-help-body ul{margin:0;padding-left:18px}
+.scan-help-body li{margin:2px 0}
+.scan-help-body .scan-note{color:var(--gold);background:rgba(245,166,35,.09);border:1px solid rgba(245,166,35,.3);border-radius:8px;padding:8px 10px;margin-top:10px;font-weight:400;line-height:1.6}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--tx2);font-weight:500;padding:7px 9px;border-bottom:1px solid var(--line);font-size:11.5px}
+td{padding:8px 9px;border-bottom:1px solid var(--line);color:var(--tx)}
+tr:hover td{background:var(--hover)}
+.pill{font-size:10.5px;padding:2px 8px;border-radius:8px}
+.pill.ok{background:rgba(46,160,67,.14);color:var(--up)}
+.pill.wa{background:rgba(245,166,35,.14);color:var(--gold)}
+.pill.ba{background:rgba(255,107,107,.14);color:var(--danger)}
+.abtn{font-size:11.5px;padding:4px 11px;border:1px solid var(--line);border-radius:7px;color:var(--tx)}
+.abtn:hover{border-color:var(--brand2);color:var(--brand2)}
+.abtn.pri{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;border:none}
+.abtn.dan{color:var(--danger)}
+.frow{display:flex;gap:10px;margin-bottom:10px}
+.frow input,.frow select,.frow textarea{flex:1;background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:12.5px;outline:none;font-family:inherit}
+.cfg{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px}
+.cfg .ci{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;background:var(--bg3);border:1px solid var(--line);border-radius:9px;font-size:12.5px}
+.cfg .ci input{width:84px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 8px;color:var(--tx);font-size:12px;text-align:right}
+.cfg .ci .lab{color:var(--tx2);font-size:12px}
+
+/* ===== v3.1：双角标 / 通知中心 / 台账 / 订阅 ===== */
+.fab .dot.blue{top:-2px;left:-2px;right:auto;background:#3b9eff}
+.notif{border:1px solid var(--line);border-left:3px solid #3b9eff;border-radius:9px;padding:9px 11px;margin-bottom:8px;background:var(--bg3);cursor:pointer;transition:.15s}
+.notif:hover{border-color:#3b9eff}
+.notif.ask{border-left-color:var(--gold)}
+.notif .nt{font-size:12.5px;color:var(--tx);line-height:1.55}
+.notif .nt b{color:#3b9eff}
+.notif .na{display:flex;gap:7px;margin-top:7px}
+.notif .na button{font-size:11px;padding:3px 10px;border:1px solid var(--line);border-radius:6px;color:var(--tx)}
+.notif .na button.pri{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;border:none}
+.sec-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin:13px 0 8px;color:var(--tx)}
+.sec-h .fold{margin-left:auto;font-size:11.5px;color:var(--tx2);cursor:pointer;font-weight:400}
+.updot{font-size:10px;padding:1.5px 7px;border-radius:8px;background:rgba(59,158,255,.14);color:#3b9eff;white-space:nowrap}
+.updot.new{background:rgba(0,194,168,.13);color:var(--brand2)}
+.vcard.flash{animation:flash 1.2s ease 2}
+@keyframes flash{0%,100%{border-color:var(--line)}50%{border-color:#3b9eff;box-shadow:0 0 0 3px rgba(59,158,255,.25)}}
+.member{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--bg2)}
+.member .mnm{font-size:12.5px;font-weight:600;color:var(--tx);white-space:nowrap}
+.member .mds{font-size:11px;color:var(--tx2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.member .ver{font-size:10.5px;color:var(--tx2);white-space:nowrap}
+.sub-note{font-size:11.5px;color:var(--gold);background:rgba(245,166,35,.09);border:1px solid rgba(245,166,35,.3);border-radius:8px;padding:7px 10px;margin-top:7px;line-height:1.6}
+.secbadge{font-size:10px;padding:1.5px 7px;border-radius:8px;white-space:nowrap}
+.secbadge.ok{background:rgba(46,160,67,.14);color:var(--up)}
+.secbadge.wa{background:rgba(245,166,35,.14);color:var(--gold)}
+.secbadge.ba{background:rgba(255,107,107,.14);color:var(--danger)}
+.sort-bar{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx2);margin:4px 0 9px;flex-wrap:wrap}
+.sort-bar button{font-size:11px;padding:3px 10px;border:1px solid var(--line);border-radius:7px;color:var(--tx2)}
+.sort-bar button.on{border-color:var(--brand2);color:var(--brand2);font-weight:600}
+.ckrow{display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--bg2);font-size:12.5px;color:var(--tx)}
+.ckrow .tag2{margin-left:auto;font-size:10px;color:var(--tx2)}
+.src-tabs{display:flex;gap:6px;margin-bottom:8px}
+.src-tabs button{flex:1;font-size:12px;padding:7px 0;border:1px solid var(--line);border-radius:8px;color:var(--tx2)}
+.src-tabs button.on{border-color:var(--brand2);color:var(--brand2);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- ================= 原型切换栏 ================= -->
+<div class="proto-bar">
+  <b>🧩 DSH 插件商城 · 界面原型 v3</b>
+  <span class="tag">设计基准：dsh-store-design-v3.md §15</span>
+  <div style="flex:1"></div>
+  <button class="ptab on" onclick="switchView('client',this)">🖥 客户端插件</button>
+  <button class="ptab" onclick="switchView('admin',this)">🛠 服务器管理端</button>
+</div>
+
+<!-- ================= 客户端视图 ================= -->
+<div id="view-client">
+  <div class="mode-note">
+    <span>运行模式演示：</span>
+    <button class="mbtn on" id="mWeb" onclick="setMode('web')">WebUI 模式（漂浮球 + 小窗）</button>
+    <button class="mbtn" id="mAddr" onclick="setMode('addr')">地址模式（CLI/headless → 浏览器打开）</button>
+    <span style="opacity:.6">同一套组件，两个挂载点；面板右下角可拖拽缩放，☾ 可切明暗</span>
+  </div>
+
+  <div class="stage" id="stage" data-theme="dark">
+    <!-- 模拟 dsh WebUI -->
+    <div class="mock-ui">
+      <div class="mock-top"><i></i><i></i><i></i><span style="margin-left:6px">dsh WebUI · 127.0.0.1:3080（模拟背景）</span></div>
+      <div class="mock-body">
+        <div class="mock-side">会话<br>工作区<br>计划<br>子代理<br><span class="mock-hint">…</span></div>
+        <div class="mock-main">Agent 会话输出区域<br><span class="mock-hint">插件商城以漂浮球形式驻留右下角，不干扰主界面 ↘</span></div>
+      </div>
+    </div>
+
+    <!-- 漂浮球 -->
+    <div class="fab" id="fab" onclick="togglePanel()" title="插件商城">
+      🧩<span class="dot" id="fabDot">!</span><span class="dot blue" id="fabBlue">3</span>
+    </div>
+
+    <!-- 面板窗口 -->
+    <div class="panel" id="panel">
+      <div class="p-top">
+        <span class="logo">🧩 插件商城</span>
+        <div class="p-search">🔍<input id="kw" placeholder="搜索插件 / 组合…（本地搜索，零网络）" oninput="doSearch(this.value)"></div>
+        <button class="p-ico" onclick="toggleTheme()" title="明暗切换" id="themeBtn">☾</button>
+        <button class="p-ico" onclick="openDrawer()" title="公告" style="position:relative">🔔<span id="bellDot" style="position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:var(--danger)"></span></button>
+        <button class="p-ico" title="我的：GitHub 登录 / 云端同步 / 服务器源" onclick="openMy()">👤</button>
+      </div>
+      <div class="p-tabs">
+        <button class="on" onclick="tab('search',this)">搜索</button>
+        <button onclick="tab('trend',this)">趋势 🔥</button>
+        <button onclick="tab('combo',this)">组合</button>
+        <button onclick="tab('my',this)">我的</button>
+      </div>
+      <div class="p-body" id="pbody"></div>
+
+      <!-- 公告抽屉 -->
+      <div class="drawer" id="drawer">
+        <div class="dh">📢 更新公告 <button onclick="closeDrawer()">✕</button></div>
+        <div style="display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap" id="annoTabs">
+          <button class="abtn on" style="border-color:var(--brand2);color:var(--brand2)" onclick="annoFilter('all',this)">全部</button>
+          <button class="abtn" onclick="annoFilter('官方源',this)">官方源</button>
+          <button class="abtn" onclick="annoFilter('mirror-01.cn',this)">mirror-01.cn</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--tx2);padding:6px 12px 0">负载均衡集群数据互通，但各服公告独立发布、按来源分标签，互不干扰。</div>
+        <div style="flex:1;overflow-y:auto" id="annoList"></div>
+      </div>
+    </div>
+
+    <!-- 地址模式 -->
+    <div class="addr" id="addr">
+      <div class="a-bar">🔒 <div class="a-url">http://127.0.0.1:47632</div></div>
+      <div class="a-guide" id="guide">
+        <span>ℹ️ 已通过本地服务打开本页面（第 <b>1</b>/3 次自动打开）。若不希望每次自动弹出，点击右侧按钮关闭；之后可随时在浏览器访问 <b>http://127.0.0.1:47632</b> 使用。</span>
+        <button onclick="closeGuide()">不再自动打开</button>
+      </div>
+      <div class="a-body" id="addrBody">（此处渲染与 WebUI 面板完全一致的界面组件——同一构建产物，仅挂载点不同）</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 管理端视图 ================= -->
+<div id="view-admin" data-theme="dark">
+  <div class="admin-wrap">
+    <div class="a-nav">
+      <div class="nl">🛠 插件商城 · 管理端</div>
+      <button class="on" onclick="apage('dash',this)">📊 仪表盘</button>
+      <button onclick="apage('sec',this)">🛡 安全监控</button>
+      <button onclick="apage('fed',this)">🌐 联邦互联</button>
+      <button onclick="apage('upd',this)">🔄 系统更新</button>
+      <button onclick="apage('plugins',this)">📦 插件库</button>
+      <button onclick="apage('combos',this)">🗂 组合审核</button>
+      <button onclick="apage('users',this)">👥 用户管理</button>
+      <button onclick="apage('reports',this)">📥 上报队列</button>
+      <button onclick="apage('anno',this)">📢 公告管理</button>
+      <button onclick="apage('cfg',this)">⚙️ 配置中心</button>
+    </div>
+    <div class="a-main" id="amain"></div>
+  </div>
+</div>
+
+<script>
+/* ================= mock 数据 ================= */
+const TREND = [
+ ["dsh-memory","为 Agent 提供持久化记忆与跨会话召回，支持本地向量存储，开箱即用。",2841,213,96,"官方",1],
+ ["dsh-web-ui","第三方增强 Web 界面：任务面板、Git 图、文件树预览一网打尽。",2312,187,121,"社区",0],
+ ["dsh-cc-tui","Claude Code 风格全屏终端 UI，npm 一键安装，键盘党福音。",1976,164,58,"社区",0],
+ ["dsh-browser-panel","内嵌浏览器面板，让 Agent 边看网页边操作，支持截图回传。",1654,142,77,"社区",0],
+ ["dsh-checkpoint","会话检查点与一键回滚，Agent 改崩了也能秒级恢复现场。",1522,121,64,"官方",0],
+ ["dsh-deep-research","多步深度研究插件：自动检索、交叉验证、输出带引用的报告。",1387,118,83,"社区",1],
+ ["dsh-vision","为纯文本模型补上眼睛：OCR、图像问答、UI 截图理解。",1290,102,45,"社区",0],
+ ["dsh-session-search","全文检索历史会话，按工具调用/文件/错误信息精准定位。",1108,97,39,"社区",0],
+ ["dsh-skins","WebUI 换肤中心，十余套主题一键切换，支持自定义 CSS。",987,88,52,"社区",0],
+ ["dsh-tool-regex","零依赖正则工具箱：匹配、替换、提取，附带常用规则库。",876,79,31,"社区",0],
+ ["dsh-pet","桌面宠物常驻 WebUI 角落，会随任务进度做表情，摸鱼伴侣。",812,74,66,"社区",0],
+ ["dsh-auto-chess","自走棋小游戏插件，跑长任务时来一局，内置排行榜。",764,69,88,"社区",0],
+ ["dsh-data-agent","连接数据库/CSV 的数据分析 Agent 技能包，自动生成图表。",701,63,42,"社区",0],
+ ["dsh-a2a","Agent 网格通信协议实现，多 Agent 协同编排的基础设施。",655,57,25,"官方",0],
+ ["dsh-rewind","时间旅行调试：回放任意一步上下文注入，精确定位幻觉来源。",598,52,34,"社区",0],
+ ["dsh-kimi-browser","Kimi 浏览器自动化桥接，网页抓取与表单填写一气呵成。",540,47,29,"社区",0],
+ ["dsh-tool-diff","文件/目录差异对比工具，支持语法高亮与三方合并视图。",489,41,18,"社区",0],
+ ["dsh-session-hub","会话共享中心：把一次成功的 Agent 轨迹分享给团队复用。",431,36,22,"社区",0],
+ ["dsh-tool-encoding","编码探测与转换全家桶，GBK/UTF-8/BOM 问题一键解决。",388,31,15,"社区",0],
+ ["dsh-gomoku","五子棋人机对战插件，内置三种难度，支持让子。",342,27,49,"社区",0]
+];
+const COMBOS = [
+ ["新手启航包","刚装 dsh 闭眼入：记忆 + 检查点 + 会话搜索，日常开发三件套。",["dsh-memory","dsh-checkpoint","dsh-session-search"],486,1203,"liwei"],
+ ["前端摸鱼套装","增强界面 + 换肤 + 桌宠，让你的 dsh 好看又好玩。",["dsh-web-ui","dsh-skins","dsh-pet"],352,891,"xiaoyu"],
+ ["深度研究工位","检索、浏览、出报告一条龙，调研类任务直接起飞。",["dsh-deep-research","dsh-browser-panel","dsh-data-agent"],297,764,"datasci_hao"],
+ ["终端极客包","TUI + 正则 + diff + 编码，纯键盘流的全套装备。",["dsh-cc-tui","dsh-tool-regex","dsh-tool-diff","dsh-tool-encoding"],188,502,"vim_rock"]
+];
+const ANNOS = [
+ ["v0.3.0","imp","新增「今日星增 Top 20」趋势榜；面板支持拖拽缩放与明暗主题；非 WebUI 环境新增地址模式。","2026-08-14","官方源"],
+ ["v0.2.1","inf","修复组合安装时版本锁定的边界问题；本地索引构建提速约 40%。","2026-08-10","官方源"],
+ ["v1.1-m","inf","【mirror-01.cn】节点公告：本周六凌晨例行维护，期间可自动切换至官方源，数据无差别。","2026-08-12","mirror-01.cn"],
+ ["v0.2.0","inf","组合功能上线：创建、一键安装、点赞；每用户上限 3 个组合。","2026-08-05","官方源"]
+];
+
+/* ================= 视图切换 ================= */
+function switchView(v,btn){
+  document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  document.getElementById('view-client').style.display=v==='client'?'block':'none';
+  document.getElementById('view-admin').style.display=v==='admin'?'block':'none';
+  if(v==='admin')apage('dash',document.querySelector('.a-nav button'));
+}
+
+/* ================= 客户端逻辑 ================= */
+const stage=document.getElementById('stage');
+let annoRead=false;
+
+function setMode(m){
+  document.getElementById('mWeb').classList.toggle('on',m==='web');
+  document.getElementById('mAddr').classList.toggle('on',m==='addr');
+  stage.classList.toggle('addr-on',m==='addr');
+}
+function togglePanel(){
+  const p=document.getElementById('panel');
+  p.classList.toggle('open');
+  if(p.classList.contains('open')&&!p.dataset.init){p.dataset.init=1;tab('search',document.querySelector('.p-tabs button'));}
+}
+function toggleTheme(){
+  const t=stage.dataset.theme==='dark'?'light':'dark';
+  stage.dataset.theme=t;
+  document.getElementById('themeBtn').textContent=t==='dark'?'☾':'☀';
+}
+function closeGuide(){
+  document.getElementById('guide').innerHTML='<span style="color:var(--up)">✅ 已关闭自动弹出。之后可在浏览器访问 <b>http://127.0.0.1:47632</b> 使用（地址同时已打印在 dsh 日志中）。</span>';
+}
+function openDrawer(){
+  document.getElementById('drawer').classList.add('open');
+  if(!annoRead){annoRead=true;document.getElementById('fabDot').style.display='none';document.getElementById('bellDot').style.display='none';}
+}
+function openMy(){
+  const tabs=document.querySelectorAll('.p-tabs button');
+  tabs.forEach(b=>b.classList.remove('on'));
+  const btn=tabs[3];
+  if(btn)btn.classList.add('on');
+  tab('my',btn);
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');}
+
+const srcBadge=s=>s==='官方'?'<span class="badge of">官方</span>':'<span class="badge cm">社区</span>';
+const dl7of=st=>Math.round(st*0.31);
+const mrow=(st,dl,lk)=>`<div class="mrow"><span class="st" title="GitHub 星数（只读，来自 GitHub）">⭐ ${st}</span><span class="dl" title="今日新增星数">📈 +${dl}</span><span class="lk" title="本站点赞（登录用户）">👍 ${lk}</span><span style="color:var(--tx2)" title="近7天用户下载量">📥 ${dl7of(st)}/7天</span><button class="ibtn">一键安装</button></div>`;
+let curSort='all';
+function setSort(s,btn){
+  curSort=s;
+  btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  doSearch(document.getElementById('kw').value);
+}
+function sortList(list){
+  if(curSort==='star')return [...list].sort((a,b)=>b[2]-a[2]);
+  if(curSort==='like')return [...list].sort((a,b)=>b[4]-a[4]);
+  if(curSort==='dl')return [...list].sort((a,b)=>dl7of(b[2])-dl7of(a[2]));
+  return list;
+}
+
+function tcardHTML(d,i){return `<div class="tcard"><span class="rk">#${i+1} ${d[5]?'🆕':''}</span><span class="nm">${d[0]}</span><span class="ds">${d[1]}</span>${mrow(d[2],d[3],d[4])}</div>`;}
+function vcardHTML(d,i,rank){return `<div class="vcard"><div class="l1">${rank?`<b style="color:var(--brand2);font-size:12px">#${i+1}</b>`:''}<span class="nm">${d[0]}</span>${srcBadge(d[5]?'官方':'社区')}<span class="compat">dsh ≥0.1.0-rc.5</span></div><div class="ds">${d[1]}</div>${mrow(d[2],d[3],d[4])}</div>`;}
+
+function tab(t,btn){
+  document.querySelectorAll('.p-tabs button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  const B=document.getElementById('pbody');
+  if(t==='search'){
+    B.innerHTML=`<div class="sec-title">📈 今日星增 Top 20 <span>每日更新 · 横滑查看 →</span></div>
+      <div class="hscroll">${TREND.map(tcardHTML).join('')}</div>
+      <div class="sec-title" style="margin-top:12px">🔍 插件搜索 <span>本地搜索 · 零网络</span></div>
+      <div class="sort-bar">排序：
+        <button class="on" onclick="setSort('all',this)">综合</button>
+        <button onclick="setSort('star',this)">⭐ 星数</button>
+        <button onclick="setSort('like',this)">👍 赞数</button>
+        <button onclick="setSort('dl',this)">📥 近7天下载</button>
+      </div>
+      <div id="sres"></div>`;
+    curSort='all';
+    doSearch('');
+  }
+  if(t==='trend'){
+    B.innerHTML=`<div class="sec-title">🔥 今日星增 Top 20 <span>按 GitHub 日增星数排序 · 本站点赞 👍 独立显示</span></div>`
+      +TREND.map((d,i)=>vcardHTML(d,i,true)).join('');
+  }
+  if(t==='combo'){
+    B.innerHTML=`<div class="sec-title">🗂 插件组合 <button class="ibtn" style="font-size:11px" onclick="toggleCreate()">＋ 创建组合</button></div>
+      <div class="vcard" id="createBox" style="display:none;border-color:rgba(0,194,168,.4)">
+        <div class="frow" style="margin-bottom:6px"><input placeholder="组合名称（≤30字）"></div>
+        <div class="frow" style="margin-bottom:8px"><input placeholder="一句话简介（≤200字）"></div>
+        <div class="src-tabs">
+          <button class="on" onclick="srcTab(0,this)">🧩 我已安装的</button>
+          <button onclick="srcTab(1,this)">🌐 全库选择</button>
+        </div>
+        <div class="p-search" style="margin-bottom:8px">🔍<input placeholder="搜索该来源下的插件…"></div>
+        <div id="srcList0">
+          <div class="ckrow"><input type="checkbox" checked> dsh-memory <span class="tag2">已安装 · 在库 ✓</span></div>
+          <div class="ckrow"><input type="checkbox" checked> dsh-checkpoint <span class="tag2">已安装 · 在库 ✓</span></div>
+          <div class="ckrow" style="opacity:.5"><input type="checkbox" disabled> my-local-tools <span class="tag2">库外插件 · <a style="color:var(--brand2);cursor:pointer">上报收录后可入组</a></span></div>
+        </div>
+        <div id="srcList1" style="display:none">
+          <div class="ckrow"><input type="checkbox"> dsh-vision <span class="tag2">未安装也可选</span></div>
+          <div class="ckrow"><input type="checkbox"> dsh-deep-research <span class="tag2">未安装也可选</span></div>
+          <div class="ckrow"><input type="checkbox"> dsh-browser-panel <span class="tag2">未安装也可选</span></div>
+        </div>
+        <div class="sub-note" style="color:var(--tx2);border-color:var(--line);background:var(--bg3)">已选 2 个成员 · 发布后默认 pending 过审 · 你的组配额：2/3</div>
+        <div class="mrow" style="margin-top:8px"><button class="ibtn" style="margin-left:0" onclick="alert('已提交审核（登录态：liwei）')">发布组合</button></div>
+      </div>
+      <div class="sort-bar">排序：
+        <button class="on" onclick="setComboSort('like',this)">👍 赞数</button>
+        <button onclick="setComboSort('dl',this)">📥 近7天下载</button>
+        <button onclick="setComboSort('new',this)">🕐 最新</button>
+      </div>
+      <div id="comboList"></div>`;
+    renderCombos('like');
+  }
+  if(t==='my'){
+    B.innerHTML=`
+    <div class="sec-h">🔔 通知中心 <span style="font-size:11px;color:var(--tx2);font-weight:400">分类处理 · 点击条目直达变动位置</span></div>
+    <div class="src-tabs" id="ntabs">
+      <button class="on" onclick="ntab('all',this)">全部 4</button>
+      <button onclick="ntab('upd',this)">📦 更新 2</button>
+      <button onclick="ntab('ask',this)">❓ 待确认 1</button>
+      <button onclick="ntab('sys',this)">🌐 源与系统 1</button>
+    </div>
+    <div class="notif" data-cat="upd" onclick="locate('inst-grp-0')">
+      <div class="nt">🔵 你订阅的 <b>「新手启航包」</b>作者新增了插件 <b>dsh-goal-planner</b>（目标规划）。</div>
+      <div class="na"><button class="pri" onclick="event.stopPropagation();alert('已并入该组并安装')">补装此插件</button><button onclick="event.stopPropagation();this.closest('.notif').remove()">忽略</button></div>
+    </div>
+    <div class="notif" data-cat="upd" onclick="locate('inst-grp-0')">
+      <div class="nt">🔵 <b>「新手启航包」</b>成员 <b>dsh-memory</b> 有更新：v0.3.1 → v0.4.0（该插件同时列于下方"单独插件"区）。</div>
+      <div class="na"><button class="pri" onclick="event.stopPropagation();alert('已更新，更新前已自动记录还原点')">一键更新</button><button onclick="event.stopPropagation();this.closest('.notif').remove()">稍后</button></div>
+    </div>
+    <div class="notif ask" data-cat="ask">
+      <div class="nt">❓ 扫描发现 <b>2 个库外插件</b>（可能是你自行安装的）：<b>my-local-tools</b>、<b>inner-flow</b>。是否上报以帮助收录？仅上报包名/仓库地址/版本。</div>
+      <div class="na"><button class="pri" onclick="event.stopPropagation();alert('已上报，感谢！管理员收录后全库可见')">上报</button><button onclick="event.stopPropagation();this.closest('.notif').remove()">否，不再询问</button></div>
+    </div>
+    <div class="notif" data-cat="sys">
+      <div class="nt">🌐 发现本源所属的负载均衡集群有新节点 <b>mirror-02.cn</b>（与本源数据实时同步）。是否加入备用源列表？<b>加入无需密码</b>。</div>
+      <div class="na"><button class="pri" onclick="event.stopPropagation();alert('已免密添加为备用源；集群内切换无感、保持登录')">加入</button><button onclick="event.stopPropagation();this.closest('.notif').remove()">不了</button></div>
+    </div>
+
+    <div class="sec-h">☁️ 云端安装清单 <span style="font-size:11px;color:var(--tx2);font-weight:400">GitHub 登录已同步 · 换设备可恢复</span></div>
+    <div class="vcard">
+      <div class="ds">云端已保存：<b>6 个插件 + 2 个组合</b>（最后同步：刚刚）。在其他机器登录本账号后：</div>
+      <div class="mrow"><button class="ibtn" style="margin-left:0" onclick="alert('确认清单后逐个安装全部 8 项（组恢复将沿用订阅）')">⚡ 一键全部恢复</button>
+      <button class="abtn" onclick="toggleRestore()">搜索选择恢复 ▾</button></div>
+      <div id="restoreBox" style="display:none;margin-top:8px">
+        <div class="p-search" style="margin-bottom:8px">🔍<input placeholder="搜索你安装过的插件 / 组…"></div>
+        <div class="ckrow"><input type="checkbox" checked> 🗂 新手启航包（组 · 3 个插件）<span class="tag2">恢复订阅</span></div>
+        <div class="ckrow"><input type="checkbox" checked> 🗂 前端摸鱼套装（组 · 3 个插件）<span class="tag2">恢复订阅</span></div>
+        <div class="ckrow"><input type="checkbox"> dsh-web-ui <span class="tag2">单独安装</span></div>
+        <div class="ckrow"><input type="checkbox"> dsh-skins <span class="tag2">单独安装</span></div>
+        <div class="ckrow"><input type="checkbox"> dsh-pet <span class="tag2">单独安装</span></div>
+        <div class="mrow"><button class="ibtn" style="margin-left:0" onclick="alert('已按勾选恢复（可不全量）')">安装所选</button></div>
+      </div>
+    </div>
+
+    <div class="sec-h">🗂 已安装 · 插件组</div>
+    <div class="vcard" id="inst-grp-0">
+      <div class="l1"><span class="nm">新手启航包</span><span class="updot new">已订阅</span><span class="updot">1 项更新 · 1 项新增</span></div>
+      <div class="ds">by liwei · 成员 3 个 · 装于 2026-08-13 · 还原点 #7 可用</div>
+      <div class="members">
+        <div class="member"><span class="mnm">dsh-memory</span><span class="mds">持久化记忆与跨会话召回</span><span class="ver"><span class="updot">可更新</span> v0.3.1→v0.4.0</span></div>
+        <div class="member"><span class="mnm">dsh-checkpoint</span><span class="mds">会话检查点与一键回滚</span><span class="ver">v1.2.0 最新</span></div>
+        <div class="member"><span class="mnm">dsh-session-search</span><span class="mds">全文检索历史会话</span><span class="ver">v0.9.4 最新</span></div>
+      </div>
+      <div class="mrow"><button class="ibtn" style="margin-left:0">一键更新全部</button>
+        <button class="abtn" onclick="alert('已回退到还原点 #7（2026-08-13 安装前状态）')">回退还原点</button>
+        <button class="abtn dan" onclick="alert('已卸载整组并回滚配置（还原点仍保留）')">一键卸载</button>
+        <button class="abtn" style="margin-left:auto">退订</button></div>
+    </div>
+
+    <div class="sec-h">🧩 已安装 · 单独插件 <span class="fold" onclick="toggleSingles()" id="foldBtn">展开全部（5）▾</span></div>
+    <div class="vcard" style="border-color:rgba(59,158,255,.5)">
+      <div class="l1"><span class="nm">dsh-memory</span><span class="updot">有更新 v0.3.1 → v0.4.0</span><span class="compat">归属：新手启航包</span></div>
+      <div class="ds">为 Agent 提供持久化记忆与跨会话召回（有更新时自动从折叠中浮现）。</div>
+      <div class="mrow"><button class="ibtn" style="margin-left:0">更新</button><button class="abtn dan">一键卸载</button></div>
+    </div>
+    <div id="singles" style="display:none">
+      <div class="p-search" style="margin-bottom:8px">🔍<input placeholder="搜索已安装插件…"></div>
+      ${['dsh-web-ui','dsh-skins','dsh-pet','dsh-tool-regex'].map(p=>{const d=TREND.find(x=>x[0]===p);return `<div class="member"><span class="mnm">${p}</span><span class="mds">${d?d[1]:''}</span><span class="ver">最新 · <a style="color:var(--danger);cursor:pointer">卸载</a></span></div>`}).join('')}
+    </div>
+
+    <div class="sec-h">🌐 服务器源 <span style="font-size:11px;color:var(--tx2);font-weight:400">开源项目 · 可接入他人部署的源</span></div>
+    <div class="vcard">
+      <div class="member" style="border-color:rgba(0,194,168,.45)"><span class="mnm">官方源（主源）</span><span class="mds">store.example.com · 内置原始密码 · 开箱即用</span><span class="ver" style="color:var(--up)">已连接 18ms</span></div>
+      <div class="member"><span class="mnm">mirror-01.cn <span class="updot">⚖️ 负载均衡</span></span><span class="mds">与主源实时同步 · 免密加入 · 切换无感</span><span class="ver" style="color:var(--tx2)">备用 12ms</span></div>
+      <div class="member"><span class="mnm">store-friend.com</span><span class="mds">独立源 · 换到此源将自动退出 GitHub 登录</span><span class="ver" style="color:var(--tx2)">未连接</span></div>
+      <div id="srcAdd" style="display:none;margin-top:8px">
+        <div class="frow" style="margin-bottom:6px"><input placeholder="服务器网址，如 https://xxx.com"></div>
+        <div class="frow" style="margin-bottom:8px"><input placeholder="该源管理员设置的访问密码（负载均衡源免密）"></div>
+        <div class="mrow"><button class="ibtn" style="margin-left:0" onclick="alert('已验证并添加，可切换为主源')">验证并添加</button>
+        <button class="abtn" onclick="alert('已列出本源集群的其他负载均衡节点：mirror-02.cn（可一键免密加入）')">搜索本源的负载均衡源</button></div>
+      </div>
+      <div class="mrow" style="margin-top:6px"><button class="abtn" onclick="const a=document.getElementById('srcAdd');a.style.display=a.style.display==='none'?'block':'none'">＋ 添加其他服务器源</button><button class="abtn" onclick="alert('切换主源：若为独立源将自动登出 GitHub 并弹「是否同步本地数据」；若为 LB 成员则无感切换')">切换主源</button><button class="abtn">测速</button></div>
+      <div class="sub-note" style="color:var(--tx2);border-color:var(--line);background:var(--bg3)">换源规则：换到独立源 = 自动登出 GitHub（本地数据保留）；换到 LB 集群内源 = 保持登录、无感切换（数据已实时同步，不算首次）。</div>
+      <div class="member" style="margin-top:6px"><span class="mnm">🔄 同步数据到当前源</span><span class="mds">提交前自动查重（组冲突可选保留/跳过/合并）</span><span class="ver"><a style="color:var(--brand2);cursor:pointer" onclick="alert('预检完成：6 项可直接同步，1 个组与该源已有内容相似，请选择处理方式')">立即同步</a></span></div>
+      <div class="member"><span class="mnm">自动同步</span><span class="mds">以后到新源自动同步本地数据（默认关）</span><span class="ver"><input type="checkbox"></span></div>
+    </div>
+
+    <div class="sec-h">⚙️ 账号</div>
+    <div class="vcard">
+      <div class="member"><span class="mnm">liwei（GitHub）</span><span class="mds">登录于官方源 · 云端清单同步中</span><span class="ver"><a style="color:var(--tx2);cursor:pointer">退出登录</a></span></div>
+      <div class="member"><span class="mnm" style="color:var(--danger)">注销账号</span><span class="mds">删除账号及云端数据；已发布组合可选删除或匿名保留</span><span class="ver"><a style="color:var(--danger);cursor:pointer" onclick="alert('注销需二次确认（输入用户名）。将删除：账号、云端清单、点赞、订阅；组合按你的选择删除或匿名保留；联邦凭证即刻失效。')">申请注销</a></span></div>
+    </div>`;
+    clearBlue();
+  }
+  renderAnno();
+}
+function doSearch(kw){
+  const R=document.getElementById('sres');if(!R)return;
+  const k=(kw||'').toLowerCase().trim();
+  const hit=k?TREND.filter(d=>(d[0]+d[1]).toLowerCase().includes(k)||d[1].includes(kw)):TREND;
+  const list=sortList(hit).slice(0,8);
+  R.innerHTML=(k&&!hit.length)
+    ?`<div class="empty">本地索引中未找到「${kw}」<br><span style="opacity:.6">（实际由 fuse.js 提供模糊+容错搜索）</span></div>`
+    :list.map(d=>vcardHTML(d,0,false)).join('');
+}
+function toggleMembers(ci){
+  const m=document.getElementById('members-'+ci);
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function toggleCreate(){
+  const b=document.getElementById('createBox');
+  b.style.display=b.style.display==='none'?'block':'none';
+}
+function srcTab(i,btn){
+  btn.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('srcList0').style.display=i===0?'block':'none';
+  document.getElementById('srcList1').style.display=i===1?'block':'none';
+}
+let comboSort='like';
+function setComboSort(s,btn){
+  comboSort=s;
+  btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderCombos(s);
+}
+function renderCombos(s){
+  const dl7c=c=>Math.round(c[4]*0.13);
+  let list=[...COMBOS];
+  if(s==='dl')list.sort((a,b)=>dl7c(b)-dl7c(a));
+  else if(s==='new')list.sort((a,b)=>COMBOS.indexOf(b)-COMBOS.indexOf(a));
+  else list.sort((a,b)=>b[3]-a[3]);
+  document.getElementById('comboList').innerHTML=list.map((c)=>{const ci=COMBOS.indexOf(c);return `<div class="vcard" id="combo-${ci}">
+        <div class="l1" style="cursor:pointer" onclick="toggleMembers(${ci})"><span class="nm">${c[0]} ▾</span><span class="compat">by ${c[5]}</span></div>
+        <div class="ds">${c[1]}</div>
+        <div class="members" id="members-${ci}" style="display:none;margin-bottom:8px">
+          ${c[2].map((p,pi)=>{const d=TREND.find(x=>x[0]===p)||[p,'（库中暂无简介）',0,0,0];return `<div class="member"><input type="checkbox" checked id="ck-${ci}-${pi}"><span class="mnm">${p}</span><span class="mds">${d[1]}</span><span class="ver">${pi===0?'<span class="updot">有更新</span>':''}v1.x</span></div>`}).join('')}
+          <div class="sub-note">💡 勾选部分插件 = <b>选择性安装</b>：插件仍归属本组，但<b>默认不订阅</b>——作者后续新增插件时你不会收到通知；如需接收，安装后点 [订阅插件组]。一键安装整组则默认订阅。</div>
+        </div>
+        <div class="mrow"><span class="lk" title="本站点赞">👍 ${c[3]}</span><span style="color:var(--tx2)" title="近7天用户下载量">📥 ${dl7c(c)}/7天</span>
+        <button class="ibtn" onclick="alert('确认清单后安装（整组安装将默认订阅该组更新通知）')">一键安装整套</button></div></div>`}).join('');
+}
+function toggleSingles(){
+  const s=document.getElementById('singles'),b=document.getElementById('foldBtn');
+  const open=s.style.display==='none';
+  s.style.display=open?'block':'none';
+  b.textContent=open?'收起 ▴':'展开全部（5）▾';
+}
+function locate(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+}
+function clearBlue(){
+  const b=document.getElementById('fabBlue');
+  if(b)b.style.display='none';
+}
+function toggleRestore(){
+  const r=document.getElementById('restoreBox');
+  r.style.display=r.style.display==='none'?'block':'none';
+}
+function ntab(cat,btn){
+  document.querySelectorAll('#ntabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.querySelectorAll('.notif').forEach(n=>{
+    n.style.display=(cat==='all'||n.dataset.cat===cat)?'block':'none';
+  });
+}
+let annoSrc='all';
+function annoFilter(s,btn){
+  annoSrc=s;
+  document.querySelectorAll('#annoTabs button').forEach(b=>{b.style.borderColor='';b.style.color=''});
+  btn.style.borderColor='var(--brand2)';btn.style.color='var(--brand2)';
+  renderAnno();
+}
+function renderAnno(){
+  const list=ANNOS.filter(a=>annoSrc==='all'||a[4]===annoSrc);
+  document.getElementById('annoList').innerHTML=list.map(a=>
+    `<div class="anno"><div class="t">${a[0]}<span class="lv ${a[1]==='imp'?'imp':'inf'}">${a[1]==='imp'?'重要':'通知'}</span><span class="badge" style="margin-left:auto">${a[4]}</span></div><div class="c">${a[2]}</div><div class="d">${a[3]}</div></div>`).join('');
+}
+renderAnno();
+
+/* ================= 管理端逻辑 ================= */
+const APAGES={
+upd:()=>`<div class="a-title">🔄 系统更新 <span style="font-size:12px;color:var(--tx2);font-weight:400">（只提醒不自动更 · 一键更新免重新部署 · 失败自动回滚）</span></div>
+ <div class="a-card"><h4>检测源（本项目开源仓库）</h4>
+  <div class="frow"><input value="https://github.com/your-org/dsh-store" placeholder="输入本开源项目的 GitHub 地址"><button class="abtn" style="flex:none">保存</button></div>
+  <div style="font-size:12px;color:var(--tx2)">每小时自动检测：最新 Release + GitHub Actions 最新成功构建（可配置只跟踪 Release）。</div></div>
+ <div class="a-card" style="border-color:rgba(245,166,35,.5)"><h4>⬆️ 发现新版本</h4><table>
+  <tr><th></th><th>版本</th><th>时间</th><th>说明</th></tr>
+  <tr><td>当前运行</td><td>v0.3.2</td><td>2026-08-10</td><td>—</td></tr>
+  <tr><td>最新 Release</td><td><b style="color:var(--gold)">v0.4.1</b></td><td>2026-08-13</td><td>联邦互联、趋势榜、安全扫描管线…</td></tr>
+  <tr><td>Actions 最新构建</td><td>main@a1b2c3d ✅</td><td>2026-08-14 06:20</td><td>构建成功（尚未打 Release）</td></tr></table>
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+   <button class="abtn pri" onclick="alert('二次确认后执行：拉取 v0.4.1 → 构建 → 自动迁移 → 滚动切换 → 健康自检；任一失败自动切回 v0.3.2。全程流式日志 + 审计。')">⚡ 一键更新到 v0.4.1</button>
+   <span style="font-size:11.5px;color:var(--tx2)">旧版镜像自动保留（回滚用，占空间 ≈200MB）</span></div></div>
+ <div class="a-card"><h4>联邦/LB 节点版本状态</h4><table>
+  <tr><th>节点</th><th>版本</th><th>状态</th></tr>
+  <tr><td>本机</td><td>v0.3.2</td><td>—</td></tr>
+  <tr><td>mirror-01.cn（LB）</td><td>v0.4.1</td><td><span class="pill wa">版本不一致 · 按 min(v0.3.2) 协议运行</span></td></tr>
+  <tr><td>store-friend.com</td><td>v0.4.1</td><td><span class="pill wa">版本不一致 · 建议尽快更新本机</span></td></tr></table>
+  <div style="font-size:12px;color:var(--tx2);margin-top:8px">兼容窗口 2 个 minor 版本；超出窗口将拒绝互联并告警。一键更新只更新本机，集群请逐台滚动。</div></div>
+ <div class="a-card"><h4>回滚与备份占用</h4><table>
+  <tr><th>项</th><th>占用</th></tr>
+  <tr><td>旧版镜像 ×2（回滚用）</td><td>≈ 400MB</td></tr>
+  <tr><td>每日 PG 备份 ×30（压缩）</td><td>≈ 0.6~1.5GB</td></tr>
+  <tr><td>Redis / 非必要数据</td><td>≈ 0（缓存不备份；非必要数据 2 天自清）</td></tr></table></div>`,
+
+fed:()=>`<div class="a-title">🌐 联邦互联 <span style="font-size:12px;color:var(--tx2);font-weight:400">（开源多服务器互联 · 发起方主动邀请，接收方审核接受）</span></div>
+ <div class="a-card"><h4>＋ 发起联邦邀请</h4>
+  <div class="frow"><input placeholder="对方服务器地址，如 https://store-friend.com"><input placeholder="对方管理员设置的联邦密码" style="max-width:220px"><button class="abtn pri" style="flex:none" onclick="alert('邀请已发送，等待对方管理员在「联邦互联」页接受')">发送邀请</button></div>
+  <div style="font-size:12px;color:var(--tx2)">注意：联邦密码 ≠ 用户访问密码，两者独立（本机均可在下方修改）。</div></div>
+ <div class="a-card"><h4>联邦关系</h4><table>
+  <tr><th>对方服务器</th><th>状态</th><th>共享内容</th><th>模式</th><th>RTT</th><th>操作</th></tr>
+  <tr><td><b>store-friend.com</b></td><td><span class="pill ok">已连接</span></td><td style="font-size:11.5px">组合 · 计数 · 安全情报</td><td>实时共享</td><td style="color:var(--up)">38ms</td><td><button class="abtn">✉️ 消息</button> <button class="abtn">调整</button> <button class="abtn dan">断开</button></td></tr>
+  <tr><td><b>dsh-hub.example.org</b></td><td><span class="pill wa">邀请待对方接受</span></td><td style="font-size:11.5px">（待协商）</td><td>—</td><td>—</td><td><button class="abtn dan">撤回</button></td></tr>
+  <tr><td><b>mirror-01.cn</b></td><td><span class="pill ok">已连接</span></td><td style="font-size:11.5px">全量（负载均衡成员）</td><td>实时共享</td><td style="color:var(--up)">12ms</td><td><button class="abtn">✉️ 消息</button> <button class="abtn">调整</button> <button class="abtn dan">断开</button></td></tr></table></div>
+ <div class="a-card"><h4>✉️ 与 store-friend.com 的站内信 <span style="font-size:11px;color:var(--tx2);font-weight:400">联邦建立后开通 · 限长 1000 字 · 双方留档审计</span></h4>
+  <div style="background:var(--bg3);border:1px solid var(--line);border-radius:9px;padding:10px;font-size:12.5px;line-height:2;margin-bottom:9px">
+   <div><b style="color:var(--brand2)">对方 10:24</b>：我这边刚拉黑 dsh-crypto-miner，建议你核查是否已同步拦截。</div>
+   <div><b style="color:var(--brand1)">我方 10:31</b>：已收到，安全情报实时共享已生效，本机已自动拦截 ✅</div>
+   <div><b style="color:var(--brand2)">对方 10:33</b>：另外本周六凌晨 2-4 点我方维护，届时快照会延迟。</div>
+  </div>
+  <div class="frow"><input placeholder="输入消息…（协商共享范围 / 维护通知 / 安全情报沟通）"><button class="abtn pri" style="flex:none">发送</button></div></div>
+ <div class="a-card"><h4>共享内容选择（对 store-friend.com）</h4><div class="cfg">
+  <div class="ci"><span class="lab">组合（Bundle）</span><input value="实时"></div>
+  <div class="ci"><span class="lab">点赞/下载计数聚合</span><input value="实时"></div>
+  <div class="ci"><span class="lab">安全情报（拉黑/风险标签）</span><input value="实时"></div>
+  <div class="ci"><span class="lab">插件补充数据（人工覆盖/质量分）</span><input value="快照 1h"></div>
+  <div class="ci"><span class="lab">趋势榜</span><input value="快照 1h"></div>
+  <div class="ci"><span class="lab">用户资料 / 云端安装清单</span><input value="不共享" disabled style="color:var(--danger)"></div></div>
+  <div style="font-size:12px;color:var(--tx2);margin-top:8px">用户跨服互动走「联邦认证」（home 服签发凭证），资料不出本机；公告与审核各自独立。</div></div>
+ <div class="a-card"><h4>⚖️ 负载均衡（实时共享集群）</h4><table>
+  <tr><th>节点</th><th>RTT</th><th>健康</th><th>当前角色</th></tr>
+  <tr><td>本机（store.example.com）</td><td>—</td><td><span class="pill ok">健康</span></td><td>主服务中</td></tr>
+  <tr><td>mirror-01.cn</td><td style="color:var(--up)">12ms</td><td><span class="pill ok">健康</span></td><td>就近分流（华东用户）</td></tr>
+  <tr><td>store-friend.com</td><td style="color:var(--up)">38ms</td><td><span class="pill ok">健康</span></td><td>就近分流（海外用户）</td></tr></table>
+  <div style="font-size:12px;color:var(--tx2);margin-top:8px">路由原则：客户端上报各源实测延迟 → 服务器按「延迟最低且健康」推荐节点；节点故障自动切换，数据因实时一致而无差别。</div>
+  <div style="font-size:12px;color:var(--tx2);margin-top:6px">退出负载均衡：双方数据冻结为最后一致快照 → 转为独立源（共享回落到联邦勾选）→ 凭证互认取消 → 各服用户端收到"退出提醒"。混合版本滚动升级/回滚按 min 协议通信（兼容窗口 2 个 minor）。</div></div>`,
+
+sec:()=>`<div class="a-title">🛡 安全监控 <span style="font-size:12px;color:var(--tx2);font-weight:400">（独立安全主页 · 阈值与告警 webhook 在配置中心可调）</span></div>
+ <div class="stat-row">
+  <div class="stat"><div class="v">1,208</div><div class="k">注册用户（GitHub）</div><div class="s">↑ 今日 +37</div></div>
+  <div class="stat"><div class="v">5,412</div><div class="k">非注册活跃设备（近7天去重）</div><div class="s">↑ 今日 +204</div></div>
+  <div class="stat"><div class="v">286 / 96</div><div class="k">插件在架 / 组合已发布</div><div class="s">组待审 3 · 已下架 2</div></div>
+  <div class="stat"><div class="v" style="color:var(--danger)">2 / 1</div><div class="k">问题插件：系统扫描 / 用户举报</div><div class="s" style="color:var(--danger)">1 已拉黑 · 1 举报待处置</div></div>
+ </div>
+ <div class="a-card"><h4>⚠️ 问题插件明细（系统扫描与用户举报分开统计）</h4><table>
+  <tr><th>插件</th><th>来源</th><th>问题</th><th>状态</th><th>操作</th></tr>
+  <tr><td><b>dsh-crypto-miner</b></td><td><span class="pill wa">L2 系统扫描</span></td><td>混淆代码 + 可疑外联域名</td><td><span class="pill ba">已拉黑（全客户端拦截）</span></td><td><button class="abtn">详情</button></td></tr>
+  <tr><td><b>dsh-auto-chess</b></td><td><span class="pill wa">L1 系统扫描</span></td><td>含 postinstall 脚本（人工复核为正常构建）</td><td><span class="pill ok">风险标注展示中</span></td><td><button class="abtn">详情</button></td></tr>
+  <tr><td><b>dsh-super-free</b></td><td><span class="pill ba">用户举报</span></td><td>举报：疑似窃取 API Key（1 人）</td><td><span class="pill wa">待处置 · L3 沙箱排队中</span></td><td><button class="abtn pri">处置</button></td></tr></table></div>
+ <div class="a-card"><h4>服务健康</h4><table>
+  <tr><th>指标</th><th>当前</th><th>状态</th></tr>
+  <tr><td>API 错误率（1h）</td><td>0.12%</td><td><span class="pill ok">正常</span></td></tr>
+  <tr><td>GitHub 同步</td><td>02:30 成功（4 变更）</td><td><span class="pill ok">正常</span></td></tr>
+  <tr><td>Token 池余量</td><td>87%（3 token）</td><td><span class="pill ok">充足</span></td></tr>
+  <tr><td>安全扫描队列</td><td>1 待扫（L3 ×1）</td><td><span class="pill ok">正常</span></td></tr>
+  <tr><td>磁盘余量（数据卷）</td><td>31.2 GB / 40 GB（已用 22%）</td><td><span class="pill ok">充足</span></td></tr>
+  <tr><td>非必要数据清理</td><td>每日 03:40 · 保留 2 天（可配）</td><td><span class="pill ok">昨清 412 MB</span></td></tr>
+  <tr><td>时钟漂移（宿主机 NTP 自检）</td><td>+18ms（容忍 ±60s）</td><td><span class="pill ok">正常</span></td></tr></table></div>
+ <div class="a-card"><h4>🚨 安全事件（近 24h）</h4><table>
+  <tr><th>类型</th><th>次数</th><th>处置</th></tr>
+  <tr><td>写接口限流触发（Top IP：45.x.x.91）</td><td>23</td><td><span class="pill wa">已自动降速</span></td></tr>
+  <tr><td>登录爆破尝试（OAuth 回调异常）</td><td>7</td><td><span class="pill ok">已临时封禁 2 IP</span></td></tr>
+  <tr><td>无匿名凭证的伪造写请求</td><td>141</td><td><span class="pill ok">全部拒绝</span></td></tr>
+  <tr><td>疑似刷赞（同 IP 多新账号集中点赞）</td><td>1 批（18 赞）</td><td><span class="pill wa">已隔离为"待确认"，不计入排行</span></td></tr>
+  <tr><td>单 IP 高频重复拉取全量 JSON</td><td>2</td><td><span class="pill ok">已限速</span></td></tr></table></div>`,
+
+dash:()=>`<div class="a-title">📊 仪表盘</div>
+ <div class="stat-row">
+  <div class="stat"><div class="v">286</div><div class="k">收录插件</div><div class="s">↑ 今日 +4</div></div>
+  <div class="stat"><div class="v">1,208</div><div class="k">注册用户（GitHub）</div><div class="s">↑ 今日 +37</div></div>
+  <div class="stat"><div class="v">96</div><div class="k">组合总数</div><div class="s">待审 3</div></div>
+  <div class="stat"><div class="v">dsh-memory</div><div class="k">今日星增冠军 📈 +213</div><div class="s">趋势榜已更新</div></div>
+ </div>
+ <div class="a-card"><h4>同步状态</h4><table>
+  <tr><th>任务</th><th>上次执行</th><th>结果</th><th>下次</th></tr>
+  <tr><td>GitHub 增量同步（topic:dsh-plugin）</td><td>02:30</td><td><span class="pill ok">成功 · 4 变更</span></td><td>每日 02:30（可配）</td></tr>
+  <tr><td>⭐ 星数快照（286 仓）</td><td>02:35</td><td><span class="pill ok">成功</span></td><td>随同步任务</td></tr>
+  <tr><td>趋势榜重算（Top 20）</td><td>02:36</td><td><span class="pill ok">成功</span></td><td>随快照</td></tr>
+  <tr><td>GitHub Token 池余量</td><td>—</td><td><span class="pill ok">充足（3 token · 87%）</span></td><td>实时</td></tr></table></div>
+ <div class="a-card"><h4>待办</h4><table>
+  <tr><th>类型</th><th>数量</th><th>入口</th></tr>
+  <tr><td>提取质量待人工完善（needs_review）</td><td>7</td><td><button class="abtn" onclick="apage('plugins')">去处理</button></td></tr>
+  <tr><td>组合待审核</td><td>3</td><td><button class="abtn" onclick="apage('combos')">去审核</button></td></tr>
+  <tr><td>举报待处置</td><td>1</td><td><button class="abtn" onclick="apage('sec')">去处置</button></td></tr>
+  <tr><td>库外插件上报待处理</td><td>3</td><td><button class="abtn" onclick="apage('reports')">去收录</button></td></tr></table></div>`,
+
+plugins:()=>`<div class="a-title" style="display:flex;align-items:center">📦 插件库 <span style="font-size:12px;color:var(--tx2);font-weight:400;margin-left:10px">（GitHub 收录扫描：定时 + 手动）</span><button class="abtn pri" style="margin-left:auto" onclick="alert('已触发一次 GitHub 收录扫描（POST /admin/sync）：搜索 → 提取入库 → 星数快照 → 趋势榜重算')">🔄 立即同步</button></div>
+ <details class="a-card scan-help">
+  <summary>🔎 GitHub 收录扫描机制说明（点击展开 / 收起）</summary>
+  <div class="scan-help-body">
+   <p>一、触发方式</p>
+   <ul>
+    <li><b>定时扫描</b>：按配置中心「GitHub 抓取间隔」执行（默认 24 小时，最低 1 小时）；服务器启动<b>不会</b>立即扫描，首次执行需等满一个完整间隔。</li>
+    <li><b>手动扫描</b>：点击本页右上「🔄 立即同步」按钮（管理端 POST /admin/sync）随时触发一次。</li>
+    <li><b>新配置搜索 token</b>：在配置中心保存 / 更换 GitHub 搜索 token 后，仅<b>重置倒计时</b>、不立即扫描；下一次扫描按新的完整间隔重新计时。</li>
+   </ul>
+   <p>二、每轮扫描做什么</p>
+   <ul>
+    <li>搜索 <b>topic:dsh-plugin</b>，并以关键词兜底 + 星数区间拆分保证搜全；</li>
+    <li>新仓库走提取管线（package.json → npm 版本 → README 简介 → 质量评分）后入库；已有仓库只刷新星数与更新时间；</li>
+    <li>写入当日星数快照，并重算趋势榜 Top 20。</li>
+   </ul>
+   <p class="scan-note">两条管线互不触发：GitHub 收录扫描只负责「发现与入库」，不会同时做安全扫描；全库安全扫描由管理端安全扫描任务（POST /admin/scan）触发。</p>
+  </div>
+ </details>
+ <div class="a-card" style="margin-top:0"><h4>插件索引（事件驱动安全扫描：仅收录/版本变更时触发 · 结果按"包名+版本"缓存 · 人工覆盖永不被同步覆盖）</h4><table>
+  <tr><th>插件</th><th>来源</th><th>⭐ 星数</th><th>📈 日增</th><th>质量分</th><th>安全扫描</th><th>状态</th><th>操作</th></tr>
+  ${TREND.slice(0,4).map((d,i)=>`<tr><td><b>${d[0]}</b></td>
+   <td>${d[5]?'<span class="pill ok">官方</span>':'<span class="pill wa">社区</span>'}</td><td>${d[2]}</td><td style="color:var(--up)">+${d[3]}</td>
+   <td>${92-i*3}</td><td><span class="secbadge ok">L2 通过</span></td><td><span class="pill ok">已收录</span></td>
+   <td><button class="abtn">编辑简介/标签</button></td></tr>`).join('')}
+  <tr><td><b>dsh-auto-chess</b></td><td><span class="pill wa">社区</span></td><td>764</td><td style="color:var(--up)">+69</td><td>85</td><td><span class="secbadge wa">含 install 脚本</span></td><td><span class="pill ok">已收录</span></td><td><button class="abtn">查看详情</button></td></tr>
+  <tr><td><b>dsh-crypto-miner</b></td><td><span class="pill wa">社区</span></td><td>3</td><td>+1</td><td>38</td><td><span class="secbadge ba">L2 命中恶意特征</span></td><td><span class="pill ba">已拉黑</span></td><td><button class="abtn dan">解除拉黑</button></td></tr>
+  <tr><td><b>dsh-obscure-tool</b><br><span style="color:var(--tx2);font-size:11px">（README 无有效段落）</span></td><td><span class="pill wa">社区</span></td><td>12</td><td style="color:var(--up)">+1</td><td style="color:var(--gold)">41</td><td><span class="secbadge ok">L2 通过</span></td><td><span class="pill wa">待完善</span></td><td><button class="abtn pri">人工补录</button></td></tr></table></div>
+ <div class="a-card"><h4>扫描资源占用（近 24h）</h4><table>
+  <tr><th>指标</th><th>数值</th></tr>
+  <tr><td>触发扫描（新收录 3 + 版本变更 5）</td><td>8 次 · 平均 2.1s/次 · 峰值 CPU 占用 &lt; 15%</td></tr>
+  <tr><td>L3 动态沙箱</td><td>0 次（无高风险信号）</td></tr></table></div>`,
+
+combos:()=>`<div class="a-title">🗂 组合审核</div>
+ <div class="a-card"><h4>待审核（3）</h4><table>
+  <tr><th>组合</th><th>作者</th><th>插件数</th><th>敏感词</th><th>操作</th></tr>
+  <tr><td><b>论文党急救包</b><br><span style="color:var(--tx2);font-size:11px">文献检索 + 深度研究 + 引用格式化…</span></td><td>paper_fan</td><td>4</td><td><span class="pill ok">未命中</span></td><td><button class="abtn pri">通过</button> <button class="abtn dan">下架</button></td></tr>
+  <tr><td><b>全栈一把梭</b></td><td>webdev_kk</td><td>6</td><td><span class="pill ok">未命中</span></td><td><button class="abtn pri">通过</button> <button class="abtn dan">下架</button></td></tr>
+  <tr><td><b>无敌好用不看后悔</b></td><td>spammer99</td><td>1</td><td><span class="pill ba">命中 2 处</span></td><td><button class="abtn">退回修改</button> <button class="abtn dan">下架</button></td></tr></table></div>`,
+
+users:()=>`<div class="a-title">👥 用户管理</div>
+ <div class="a-card"><h4>用户列表（仅 GitHub 登录 · 不采集头像）</h4><table>
+  <tr><th>用户名</th><th>姓名</th><th>注册时间</th><th>组合数</th><th>状态</th><th>操作</th></tr>
+  <tr><td>liwei</td><td>李伟</td><td>2026-08-13</td><td>2/3</td><td><span class="pill ok">正常</span></td><td><button class="abtn dan">禁用</button></td></tr>
+  <tr><td>xiaoyu</td><td>陈晓雨</td><td>2026-08-13</td><td>1/3</td><td><span class="pill ok">正常</span></td><td><button class="abtn dan">禁用</button></td></tr>
+  <tr><td>spammer99</td><td>—</td><td>2026-08-14</td><td>3/3</td><td><span class="pill ba">观察中</span></td><td><button class="abtn dan">禁用</button></td></tr></table></div>`,
+
+reports:()=>`<div class="a-title">📥 上报队列 <span style="font-size:12px;color:var(--tx2);font-weight:400">（用户端扫描发现的库外插件 · 上报人数 = 收录优先级信号）</span></div>
+ <div class="a-card"><h4>⚡ 单独提速收录框</h4>
+  <div class="frow"><input placeholder="输入 GitHub 仓库地址，如 https://github.com/owner/repo"><button class="abtn pri" style="flex:none" onclick="alert('已触发单条提取管线：抓取 → 五级提取 → L0~L2 安全扫描，预计 1 分钟内入库')">立即收录</button></div>
+  <div style="font-size:12px;color:var(--tx2)">不走每日同步队列，收录成功后自动进入下一轮下发数据。</div></div>
+ <div class="a-card"><h4>待处理上报（按上报人数排序）</h4><table>
+  <tr><th>插件</th><th>仓库地址</th><th>上报人数</th><th>最近上报</th><th>操作</th></tr>
+  <tr><td><b>my-local-tools</b></td><td style="font-size:11.5px;color:var(--tx2)">github.com/liwei/my-local-tools</td><td>6</td><td>2026-08-14</td><td><button class="abtn pri">提速收录</button> <button class="abtn">标记无效</button></td></tr>
+  <tr><td><b>inner-flow</b></td><td style="font-size:11.5px;color:var(--tx2)">（用户未提供，仅包名）</td><td>2</td><td>2026-08-14</td><td><button class="abtn" onclick="alert('已按包名在 GitHub 搜索候选仓库')">搜索候选</button> <button class="abtn">标记无效</button></td></tr>
+  <tr><td><b>team-ci-helper</b></td><td style="font-size:11.5px;color:var(--tx2)">github.com/acme/team-ci-helper</td><td>1</td><td>2026-08-13</td><td><button class="abtn pri">提速收录</button> <button class="abtn">标记无效</button></td></tr></table></div>
+ <div class="a-card"><h4>已处理（归档）</h4><table>
+  <tr><th>插件</th><th>处理结果</th><th>时间</th></tr>
+  <tr><td>dsh-team-sync</td><td><span class="pill ok">已收录</span></td><td>2026-08-13</td></tr>
+  <tr><td>private-corp-plugin</td><td><span class="pill ba">拒绝（企业私有）</span></td><td>2026-08-13</td></tr></table></div>`,
+
+anno:()=>`<div class="a-title">📢 公告管理 <span style="font-size:12px;color:var(--tx2);font-weight:400">（发布 = 手动推送更新提醒，客户端叹号即源于此；无任何自动监控）</span></div>
+ <div class="a-card"><h4>发布新公告</h4>
+  <div class="frow"><input placeholder="版本号，如 v0.3.1"><select><option>通知</option><option>重要</option></select></div>
+  <div class="frow"><textarea rows="3" placeholder="更新内容（用户点击叹号后可见，支持历史回看）"></textarea></div>
+  <button class="abtn pri">发布并推送提醒</button></div>
+ <div class="a-card"><h4>历史公告</h4><table>
+  <tr><th>版本</th><th>分级</th><th>发布日期</th><th>已读率</th><th>操作</th></tr>
+  ${ANNOS.map(a=>`<tr><td>${a[0]}</td><td>${a[1]==='imp'?'<span class="pill ba">重要</span>':'<span class="pill ok">通知</span>'}</td><td>${a[3]}</td><td>${a[0]==='v0.3.0'?'62%':'97%'}</td><td><button class="abtn">编辑</button> <button class="abtn dan">下线</button></td></tr>`).join('')}</table></div>`,
+
+cfg:()=>`<div class="a-title">⚙️ 配置中心 <span style="font-size:12px;color:var(--tx2);font-weight:400">（保存即生效 · 客户端下次心跳拉取 · 全部写审计日志）</span></div>
+ <div class="a-card"><h4>服务器源与联邦</h4><div class="cfg">
+   <div class="ci"><span class="lab">源服务器连接密码（留空 = 不要求）</span><input value="" placeholder="客户端加源需填写"></div>
+   <div class="ci"><span class="lab">联邦密码（留空 = 不启用联邦）</span><input value="" placeholder="服务器间握手校验"></div>
+   <div class="ci"><span class="lab">联邦（服务器间）</span><input value="开"></div>
+   <div class="ci"><span class="lab">说明</span><span class="lab" style="text-align:right">源连接密码与联邦密码相互独立</span></div></div></div>
+ <div class="a-card"><h4>同步与刷新</h4><div class="cfg">
+  <div class="ci"><span class="lab">GitHub 抓取间隔（小时）</span><input value="24"></div>
+  <div class="ci"><span class="lab">客户端插件数据心跳（分钟）</span><input value="30"></div>
+  <div class="ci"><span class="lab">客户端组数据刷新（分钟）</span><input value="30"></div>
+  <div class="ci"><span class="lab">星数快照保留（天）</span><input value="90"></div>
+  <div class="ci"><span class="lab">非必要数据保留（天，0=永久）</span><input value="2"></div></div></div>
+ <div class="a-card"><h4>榜单与内容</h4><div class="cfg">
+  <div class="ci"><span class="lab">趋势榜条数</span><input value="20"></div>
+  <div class="ci"><span class="lab">提取质量阈值（低于进人工）</span><input value="60"></div>
+  <div class="ci"><span class="lab">README 抓取上限（KB）</span><input value="32"></div>
+  <div class="ci"><span class="lab">标签数量上限</span><input value="12"></div></div></div>
+ <div class="a-card"><h4>用户与引导</h4><div class="cfg">
+  <div class="ci"><span class="lab">每用户组合上限</span><input value="3"></div>
+  <div class="ci"><span class="lab">首启自动打开次数（地址模式）</span><input value="3"></div>
+  <div class="ci"><span class="lab">地址模式端口（0=自动）</span><input value="0"></div>
+  <div class="ci"><span class="lab">默认主题（system/light/dark）</span><input value="system"></div></div></div>
+ <div class="a-card"><h4>功能开关</h4><div class="cfg">
+  <div class="ci"><span class="lab">趋势榜</span><input value="开"></div>
+  <div class="ci"><span class="lab">点赞</span><input value="开"></div>
+  <div class="ci"><span class="lab">组合</span><input value="开"></div>
+  <div class="ci"><span class="lab">公告提醒</span><input value="开"></div></div>
+  <div style="margin-top:12px"><button class="abtn pri">保存全部</button></div></div>`
+};
+function apage(p,btn){
+  document.querySelectorAll('.a-nav button').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  document.getElementById('amain').innerHTML=APAGES[p]();
+}
+apage('dash',document.querySelector('.a-nav button'));
+</script>
+</body>
+</html>

@@ -1,0 +1,1446 @@
+import { API, type Announcement, type Combo, type Delta, type InstallRecord, type Plugin, type ServerSource } from '@dsh-store/shared'
+import { MOCK_SOURCES, MockDataSource } from '../data/mock.js'
+import { HttpDataSource, type FetchLike } from '../data/http.js'
+import { isUpdateAvailable } from '../core/versions.js'
+import { Ledger, type KeyValueStore } from '../store/ledger.js'
+
+/**
+ * 客户端 UI 与数据层之间的桥接接口（transport 无关）：
+ * - 生产：Client 半通过 host RPC 实现此接口，数据来自 Host 的 StoreClient；
+ * - 预览/测试：用 mockBridge() 直接跑 MockDataSource + Ledger。
+ */
+export interface AccountInfo {
+  login: string
+  name: string | null
+  registered_at: string
+  combo_quota: string
+}
+
+export interface CloudList {
+  plugins: string[]
+  combos: string[]
+}
+
+export interface StoreState {
+  plugins: Plugin[]
+  combos: Combo[]
+  announcements: Announcement[]
+  /** 已安装清单：包名 → 安装版本。 */
+  installed: Record<string, string>
+  /** 订阅关系：组合名 → 是否订阅。 */
+  subscriptions: Record<string, boolean>
+  /** 我已点赞的目标：target（插件包名 / 组合联邦 id）→ 是否已赞（登录后初始化，点赞/取消即时更新）。 */
+  liked: Record<string, boolean>
+  sources: ServerSource[]
+  account: AccountInfo
+  cloud: CloudList
+  /** 当前数据主源（含代理前缀），登录链接与源展示以它为准。 */
+  serverUrl: string
+  /** 已确认的更新提醒：包名 → 已确认版本（同一版本只提醒一次，新版本重新提醒）。 */
+  acked: Record<string, string>
+  /** 客户端插件版本推送（服务端下发；与本地 CLIENT_PLUGIN_VERSION 比对提示更新）。 */
+  clientPlugin: { version: string; install: string } | null
+  /** 服务端下发的数据心跳间隔（分钟，默认 30）；客户端据此周期重拉 bootstrap。 */
+  heartbeatMin: number
+  /** 插件组审核开关：true=发布需审核；false=发布直接上线。缺省 true(保守)。 */
+  comboReviewEnabled: boolean
+  /** 趋势榜条数(服务端下发,缺省 20)。 */
+  trendingSize: number
+  /** 功能开关(管理端配置中心下发)：趋势榜/组合/公告。 */
+  features: { trending: boolean; combos: boolean; announcements: boolean }
+}
+
+/** 客户端插件（商城面板）自身版本，与服务端推送的 client_plugin.version 比对。 */
+export const CLIENT_PLUGIN_VERSION = '0.2.0'
+
+export interface StoreBridge {
+  bootstrap(): Promise<StoreState>
+  /** 强制重拉服务端数据（周期心跳用；与 bootstrap 结果同构）。 */
+  refresh(): Promise<StoreState>
+  /**
+   * 订阅数据变化：bootstrap 的后台全量/增量同步、refresh、换源等完成后通知。
+   * 返回取消订阅函数。HTTP 桥接在后台同步完成后调用；未实现时可省略。
+   */
+  subscribe?(cb: (s: StoreState) => void): () => void
+  /** 把本地已装插件 + 订阅组上传为云端清单（登录时可用），返回最新云端清单。 */
+  pushCloud(): Promise<CloudList>
+  install(pkg: string): Promise<Record<string, string>>
+  /** 点赞 / 取消点赞（登录）：切换式，返回最新计数与是否已赞。 */
+  like(pkg: string): Promise<{ count: number; liked: boolean }>
+  /** 安装 Agent(Preset)：Host 侧负责复制到 ~/.dsh/.agent-presets/<presetName>。 */
+  installPreset(pkg: string, presetName?: string): Promise<Record<string, string>>
+  uninstall(pkg: string): Promise<Record<string, string>>
+  update(pkg: string): Promise<Record<string, string>>
+  installCombo(name: string): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean>; manual: ManualInstallItem[] }>
+  unsubscribe(name: string): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
+  removeAnnouncement(id: string): Promise<Announcement[]>
+  addSource(url: string, password: string): Promise<ServerSource[]>
+  removeSource(id: string): Promise<ServerSource[]>
+  pingSource(id: string): Promise<ServerSource[]>
+  /** 切换主源：数据层改从该源拉取并全量重载（本地台账与登录态保留）。 */
+  switchSource(id: string): Promise<StoreState>
+  addCombo(name: string, desc: string, members: ComboMemberInput[]): Promise<Combo[]>
+  /** 编辑自己的组合（名称/描述/成员）。 */
+  updateCombo(id: string, name: string, desc: string, members: ComboMemberInput[]): Promise<Combo[]>
+  /** 删除自己的组合（仅作者本人）。 */
+  removeCombo(id: string): Promise<Combo[]>
+  /** 库外插件上报（登录）：提交后进管理端"待确认"清单。 */
+  reportMissing(pkg: string, repoUrl: string | null, version: string): Promise<{ ok: boolean; message: string }>
+  restorePlugins(plugins: string[]): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
+  restoreSubscriptions(combos: string[]): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
+  ackUpdate(pkg: string): Promise<Record<string, string>>
+  ackAll(): Promise<Record<string, string>>
+  /** 客户端插件自身在线更新：复用插件更新机制 = dsh plugin add <spec>@<version>。 */
+  updateClientPlugin(spec: string, version: string): Promise<{ ok: boolean; message: string }>
+  /** 注销账号（联动服务器清理点赞/云端清单；组合删除或匿名保留）。 */
+  deleteAccount(combos: 'delete' | 'anonymize'): Promise<{ ok: boolean; message: string }>
+}
+
+/** 手动安装项：组合一键安装时跳过,交由用户逐个打开插件页面安装。 */
+export interface ManualInstallItem {
+  pkg: string
+  /** 插件展示名（查不到用包名）。 */
+  name: string
+  /** 打开地址：插件仓库页,无则 GitHub 搜索页兜底。 */
+  url: string
+}
+
+/** 组合成员输入：包名字符串(全 auto)或 {pkg, install_mode} 对象。 */
+export type ComboMemberInput = string | { pkg: string; install_mode?: 'auto' | 'manual' }
+
+/** 内存 KV 存储（mock 用）。 */
+function memoryStore(): KeyValueStore {
+  const m = new Map<string, string>()
+  return {
+    get: async (k) => (m.has(k) ? (m.get(k) as string) : null),
+    set: async (k, v) => {
+      m.set(k, v)
+    },
+    remove: async (k) => {
+      m.delete(k)
+    },
+  }
+}
+
+function toInstalledMap(ledger: Ledger): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const r of ledger.listInstalls()) out[r.pkg] = r.version
+  return out
+}
+
+function latestVersion(plugins: Plugin[], pkg: string): string {
+  return plugins.find((x) => x.id === pkg)?.version ?? '1.0.0'
+}
+
+/** mock 桥接：真实走 MockDataSource + Ledger，与 StoreClient 的数据流一致。 */
+export function mockBridge(): StoreBridge {
+  const source = new MockDataSource()
+  const ledger = new Ledger(memoryStore(), 'dsh-store:mock')
+  let plugins: Plugin[] = []
+  let combos: Combo[] = []
+  let announcements: Announcement[] = []
+  const subscriptions: Record<string, boolean> = { 新手启航包: true }
+  let sources: ServerSource[] = [...MOCK_SOURCES]
+  const account: AccountInfo = { login: 'liwei', name: '李伟', registered_at: '2026-08-13', combo_quota: '2/3' }
+  let cloud: CloudList = { plugins: ['dsh-memory', 'dsh-checkpoint', 'dsh-session-search', 'dsh-web-ui', 'dsh-skins', 'dsh-pet'], combos: ['新手启航包', '前端摸鱼套装'] }
+  const acked: Record<string, string> = {}
+  const likedSet = new Set<string>()
+  let clientPlugin: { version: string; install: string } | null = null
+  let heartbeatMin = 30
+  let comboReviewEnabled = true
+  let trendingSize = 20
+  let features = { trending: true, combos: true, announcements: true }
+  let ready: Promise<void> | null = null
+
+  const seed: Array<[string, string]> = [
+    ['dsh-memory', '0.3.1'],
+    ['dsh-checkpoint', '1.2.0'],
+    ['dsh-session-search', '0.9.4'],
+    ['dsh-web-ui', '1.0.0'],
+    ['dsh-skins', '1.0.0'],
+    ['dsh-pet', '1.0.0'],
+  ]
+
+  const installRecord = (pkg: string, version: string): InstallRecord => ({
+    pkg,
+    version,
+    installed_at: new Date().toISOString(),
+    source: 'single',
+    combo_id: null,
+    restore_point_id: null,
+  })
+
+  /** 恢复组合 = 订阅 + 安装组内成员。 */
+  const restoreCombo = async (cname: string) => {
+    subscriptions[cname] = true
+    const c = combos.find((x) => x.name === cname)
+    if (c) for (const m of c.members) await ledger.addInstall(installRecord(m.pkg, latestVersion(plugins, m.pkg)))
+  }
+
+  /** 全量拉取服务端数据（bootstrap 与周期 refresh 共用）。 */
+  const load = async () => {
+    await ledger.load()
+    if (ledger.listInstalls().length === 0) {
+      for (const [pkg, version] of seed) await ledger.addInstall(installRecord(pkg, version))
+    }
+    plugins = (await source.fetchPlugins()).items
+    combos = (await source.fetchCombos()).items
+    announcements = await source.fetchAnnouncements()
+    const manifest = await source.fetchManifest()
+    clientPlugin = manifest.client_plugin ?? null
+    heartbeatMin = manifest.client_config?.data_heartbeat_min ?? 30
+    comboReviewEnabled = manifest.client_config?.combo_review_enabled !== false
+    trendingSize = manifest.client_config?.trending_size ?? 20
+    features = { trending: manifest.features?.trending !== false, combos: manifest.features?.combos !== false, announcements: manifest.features?.announcements !== false }
+  }
+
+  const state = (): StoreState => ({
+    plugins,
+    combos,
+    announcements,
+    installed: toInstalledMap(ledger),
+    subscriptions: { ...subscriptions },
+    liked: Object.fromEntries([...likedSet].map((t) => [t, true])),
+    sources,
+    account,
+    cloud,
+    serverUrl: 'https://blog.1qwq1.top',
+    acked: { ...acked },
+    clientPlugin,
+    heartbeatMin,
+    comboReviewEnabled,
+    trendingSize,
+    features,
+  })
+
+  return {
+    async bootstrap() {
+      ready ??= load()
+      await ready
+      return state()
+    },
+    async refresh() {
+      ready = load()
+      await ready
+      return state()
+    },
+    subscribe() {
+      // mock 桥接 bootstrap 已 await 全量加载，无后台同步，无需订阅。
+      return () => {}
+    },
+    async pushCloud() {
+      await ready
+      cloud = {
+        plugins: [...new Set(ledger.listInstalls().map((r) => r.pkg))],
+        combos: Object.keys(subscriptions),
+      }
+      return cloud
+    },
+    async install(pkg) {
+      if (toInstalledMap(ledger)[pkg]) return toInstalledMap(ledger)
+      await ledger.addInstall(installRecord(pkg, latestVersion(plugins, pkg)))
+      return toInstalledMap(ledger)
+    },
+    async like(pkg) {
+      const liked = !likedSet.has(pkg)
+      if (liked) likedSet.add(pkg)
+      else likedSet.delete(pkg)
+      const before = plugins.find((x) => x.repo === pkg)?.likes ?? combos.find((x) => x.id === pkg)?.likes ?? 0
+      const count = Math.max(0, before + (liked ? 1 : -1))
+      plugins = plugins.map((x) => (x.repo === pkg ? { ...x, likes: count } : x))
+      combos = combos.map((x) => (x.id === pkg ? { ...x, likes: count } : x))
+      return { count, liked }
+    },
+    async installPreset(pkg, presetName) {
+      const version = plugins.find((p) => p.id === pkg)?.version ?? '1.0.0'
+      if (toInstalledMap(ledger)[pkg] === version) return toInstalledMap(ledger)
+      await ledger.addInstall({ ...installRecord(pkg, version), source: 'single' })
+      void presetName
+      return toInstalledMap(ledger)
+    },
+    async uninstall(pkg) {
+      await ledger.removeInstall(pkg)
+      return toInstalledMap(ledger)
+    },
+    async update(pkg) {
+      await ledger.addInstall(installRecord(pkg, latestVersion(plugins, pkg)))
+      return toInstalledMap(ledger)
+    },
+    async installCombo(name) {
+      subscriptions[name] = true
+      const c = combos.find((x) => x.name === name)
+      const manual: ManualInstallItem[] = []
+      if (c) {
+        const current = toInstalledMap(ledger)
+        for (const m of c.members) {
+          if (current[m.pkg]) continue
+          if (m.install_mode === 'manual') {
+            // 手动安装成员：不自动装,收集清单让用户逐个打开插件页面
+            const p = plugins.find((x) => x.id === m.pkg)
+            manual.push({
+              pkg: m.pkg,
+              name: p?.name ?? m.pkg,
+              url: p?.repo_url && p.repo_url.startsWith('http') ? p.repo_url : `https://github.com/search?q=${encodeURIComponent(m.pkg)}&type=repositories`,
+            })
+            continue
+          }
+          await ledger.addInstall(installRecord(m.pkg, latestVersion(plugins, m.pkg)))
+        }
+      }
+      return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions }, manual }
+    },
+    async unsubscribe(name) {
+      delete subscriptions[name]
+      return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
+    },
+    async removeAnnouncement(id) {
+      announcements = announcements.filter((a) => a.id !== id)
+      return announcements
+    },
+    async addSource(url, _password) {
+      const trimmed = (url || '').trim()
+      sources = [
+        ...sources,
+        {
+          id: `src_${Date.now()}`,
+          name: trimmed,
+          url: trimmed,
+          builtin: false,
+          enabled: !!trimmed,
+          latency_ms: null,
+          cluster_id: null,
+          is_lb: false,
+          last_seen_at: new Date().toISOString(),
+          role: 'backup',
+          status: trimmed ? 'connected' : 'disconnected',
+        },
+      ]
+      return sources
+    },
+    async addCombo(name, desc, members) {
+      const combo: Combo = {
+        id: `blog.1qwq1.top:combo_${Date.now()}`,
+        slug: name,
+        name,
+        description: desc || '（无简介）',
+        members: members.map((m) => (typeof m === 'string' ? { pkg: m, version: '*', install_mode: 'auto' as const } : { pkg: m.pkg, version: '*', install_mode: m.install_mode === 'manual' ? 'manual' as const : 'auto' as const })),
+        author: 'liwei',
+        author_github: 'liwei',
+        likes: 0,
+        downloads_7d: 0,
+        status: 'pending',
+        origin_server: 'blog.1qwq1.top',
+        version: 1,
+        updated_at: new Date().toISOString(),
+      }
+      combos = [...combos, combo]
+      return combos
+    },
+    async updateCombo(id, name, desc, members) {
+      combos = combos.map((c) =>
+        c.id === id
+          ? { ...c, name, slug: name, description: desc || '（无简介）', members: members.map((m) => (typeof m === 'string' ? { pkg: m, version: '*', install_mode: 'auto' as const } : { pkg: m.pkg, version: '*', install_mode: m.install_mode === 'manual' ? 'manual' as const : 'auto' as const })), version: c.version + 1, updated_at: new Date().toISOString() }
+          : c,
+      )
+      return combos
+    },
+    async removeCombo(id) {
+      combos = combos.filter((c) => c.id !== id)
+      return combos
+    },
+    async reportMissing(pkg, _repoUrl, _version) {
+      return { ok: true, message: `已收到上报：${pkg}，我们会持续跟进（演示模式）` }
+    },
+    async updateClientPlugin(spec, version) {
+      return { ok: true, message: `已开始在线更新：dsh plugin add ${spec}@${version}（复用插件更新机制）` }
+    },
+    async deleteAccount(combos) {
+      return { ok: true, message: '账号已注销（演示模式）：点赞与云端清单已删除，组合已' + (combos === 'delete' ? '删除' : '匿名保留') }
+    },
+    async restorePlugins(ps) {
+      for (const p of ps) await ledger.addInstall(installRecord(p, latestVersion(plugins, p)))
+      return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
+    },
+    async restoreSubscriptions(cs) {
+      for (const c of cs) await restoreCombo(c)
+      return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
+    },
+    async removeSource(id) {
+      sources = sources.filter((s) => s.id !== id)
+      return sources
+    },
+    async pingSource(id) {
+      sources = sources.map((s) =>
+        s.id === id ? { ...s, latency_ms: Math.round(8 + Math.random() * 82), status: 'connected' as const } : s,
+      )
+      return sources
+    },
+    async switchSource(id) {
+      const target = sources.find((s) => s.id === id)
+      if (target) sources = sources.map((s) => ({ ...s, role: s.id === id ? 'primary' as const : 'backup' as const }))
+      return state()
+    },
+    async ackUpdate(pkg) {
+      acked[pkg] = latestVersion(plugins, pkg)
+      return { ...acked }
+    },
+    async ackAll() {
+      const inst = toInstalledMap(ledger)
+      for (const [pkg, iv] of Object.entries(inst)) {
+        const p = plugins.find((x) => x.id === pkg)
+        if (p && isUpdateAvailable(iv, p.version)) acked[pkg] = p.version
+      }
+      return { ...acked }
+    },
+  }
+}
+
+/** 可变的 token 引用（登录后由 StoreApp 写入，桥接读取）。 */
+export interface TokenStore {
+  current: string | null
+}
+
+function decodeJwt(token: string): { login: string; name: string | null } | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    const text = typeof atob === 'function' ? atob(padded) : ''
+    const payload = JSON.parse(text) as { login?: string; name?: string | null }
+    return payload.login ? { login: payload.login, name: payload.name ?? null } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * HTTP 桥接：数据来自 dsh-store-server（增量 + 全量兜底），写走本地台账，
+ * 登录后云端清单与写操作实时同步到服务端（PUT /api/v1/me/installs）。
+ * 服务端离线时数据降级为空列表，UI 层显示离线状态。
+ */
+export function httpBridge(opts: {
+  baseUrl: string
+  tokenStore?: TokenStore
+  accessPassword?: string
+  /** 可选持久化（localStorage / Host KV）：保存自定义源、源密码与当前主源。 */
+  sourceStore?: KeyValueStore
+  /** 本地安装器 RPC 根地址（同源 Host 稍后实现），如 http://127.0.0.1:3080/dsh-store/rpc。 */
+  rpcBase?: string
+}): StoreBridge {
+  const SOURCE_KEY = 'dsh-store:http:sources:v1'
+  const PRIMARY_KEY = 'dsh-store:http:primary:v1'
+  const ANNO_DISMISS_KEY = 'dsh-store:http:annos-dismissed:v1'
+  const CACHE_KEY = 'dsh-store:http:cache:v1'
+  /** 已删除（本地隐藏）的公告 id：服务器没有逐用户公告状态接口，删除 = 本机持久隐藏。 */
+  const dismissedAnnos = new Set<string>()
+  let annosRestored = false
+
+  /**
+   * 本地持久缓存（localStorage / Host KV）：全量数据 + 服务器 revision。
+   * iframe 每次加载先读缓存立即出界面，后台再按 revision 增量拉取（失败才全量），
+   * 彻底避免「打开一次面板 = 重新全量同步一次」。
+   */
+  interface CacheShape {
+    plugins: Plugin[]
+    combos: Combo[]
+    announcements: Announcement[]
+    pluginsRevision?: string
+    combosRevision?: string
+    clientPlugin: { version: string; install: string } | null
+    heartbeatMin: number
+    comboLimit: number
+    comboReviewEnabled?: boolean
+    trendingSize?: number
+    ts: number
+  }
+  let cacheLoaded = false
+  let pluginsRevision: string | undefined
+  let combosRevision: string | undefined
+  const listeners = new Set<(s: StoreState) => void>()
+  let loadStarted = false
+  let loadPromise: Promise<void> | null = null
+
+  // 源地址 → 连接密码（自定义源持久化；baseUrl 的初始密码由 opts.accessPassword 注入）。
+  const sourcePasswords = new Map<string, string>()
+  const normUrl = (u: string) => String(u ?? '').trim().replace(/\/+$/, '')
+  if (opts.accessPassword) sourcePasswords.set(normUrl(opts.baseUrl), opts.accessPassword)
+
+  // 当前主源：切换后重建 HttpDataSource，所有读写都走 activeBase。
+  let activeBase = normUrl(opts.baseUrl)
+  const currentBase = () => activeBase
+
+  /** 本地安装器 RPC：未配置 rpcBase 时写操作直接失败，避免只改台账的“表面安装”。 */
+  const rpcBase = opts.rpcBase?.trim().replace(/\/+$/, '') ?? ''
+  async function rpcCall(path: string, body: Record<string, unknown>) {
+    if (!rpcBase) throw new Error('本地安装器未连接')
+    const res = await fetch(rpcBase + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = (await res.json()) as { ok?: boolean; message?: string; output?: string }
+    if (!res.ok || !json.ok) throw new Error(json.message || '操作失败')
+    return json
+  }
+
+  /**
+   * 跨源 HTTP 代理（Host 提供 /dsh-store/http）：
+   * 自定义服务器源在浏览器里被 CORS 拦截，数据读写统一改走本地 Host 转发，
+   * 转发时只透传认证与幂等无关头；返回真实 status/headers/body。
+   */
+  const FORWARD_HEADERS = ['authorization', 'x-access-password', 'x-anon-token', 'content-type', 'accept']
+  async function hostFetch(url: string, init?: RequestInit): Promise<Response> {
+    if (!rpcBase) throw new Error('本地 HTTP 代理未连接')
+    const httpBase = rpcBase.replace(/\/rpc\/?$/, '') + '/http'
+    const method = (init?.method ?? 'GET').toUpperCase()
+    const headers: Record<string, string> = {}
+    const src = init?.headers
+    if (src) {
+      if (src instanceof Headers) src.forEach((v, k) => { headers[k] = v })
+      else if (Array.isArray(src)) src.forEach(([k, v]) => { headers[k] = v })
+      else Object.entries(src).forEach(([k, v]) => { headers[k] = v })
+    }
+    const fwd: Record<string, string> = {}
+    for (const name of FORWARD_HEADERS) {
+      const v = headers[name] ?? headers[name.toLowerCase()]
+      if (v) fwd[name] = v
+    }
+    let bodyText = ''
+    if (typeof init?.body === 'string') bodyText = init.body
+    try {
+      const res = await fetch(httpBase, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, method, headers: fwd, body: bodyText }),
+        // 透传调用方的超时/中止信号：测速(6s)、数据请求(20s)的 AbortController 必须生效，
+        // 否则只能干等宿主代理的 20s×4 次重试(最长 80s)，界面表现为"卡住"。
+        signal: init?.signal,
+      })
+      const j = (await res.json()) as { status?: number; headers?: Record<string, string>; body?: string }
+      return new Response(j.body ?? '', {
+        status: j.status ?? 502,
+        headers: j.headers ? new Headers(j.headers) : new Headers({ 'Content-Type': 'text/plain; charset=utf-8' }),
+      })
+    } catch (e) {
+      return new Response(String((e as Error)?.message ?? e), { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+    }
+  }
+
+  /** 同源直连（默认源走 /dsh-store/api 反代），跨源走 Host 本地代理。 */
+  const makeFetcher = (): FetchLike => {
+    if (!rpcBase) return (url, init) => fetch(url, init)
+    const selfOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    return (url, init = {}) => {
+      try {
+        if (selfOrigin && new URL(url, selfOrigin).origin === selfOrigin) return fetch(url, init)
+      } catch {
+        /* 非法 URL 交给 fetch 报错 */
+      }
+      return hostFetch(url, init)
+    }
+  }
+  const dataFetch: FetchLike = makeFetcher()
+
+  const makeSource = (base: string) =>
+    new HttpDataSource(
+      base,
+      () => opts.tokenStore?.current ?? null,
+      () => sourcePasswords.get(normUrl(base)) ?? '',
+      dataFetch,
+    )
+  let source: HttpDataSource = makeSource(activeBase)
+
+  const ledger = new Ledger(memoryStore(), 'dsh-store:http')
+  let plugins: Plugin[] = []
+  let combos: Combo[] = []
+  let announcements: Announcement[] = []
+  let sources: ServerSource[] = []
+  let nodeSources: ServerSource[] = []
+  let customSources: ServerSource[] = []
+  /** 已知内置源的健康状态（默认源 + 曾切换过的源都保留在列表里，便于切回）。 */
+  const baseHealth = new Map<string, { reachable: boolean; latency: number | null }>()
+  const subscriptions: Record<string, boolean> = {}
+  const acked: Record<string, string> = {}
+  let cloud: CloudList = { plugins: [], combos: [] }
+  /** 我已点赞的目标集合（登录后从 GET /api/v1/me/likes 初始化，点赞/取消即时增删）。 */
+  const likedTargets = new Set<string>()
+  /**
+   * 真实已装清单（host 侧 /rpc/installed 返回）：loader 装配（含 DSH 自带 bundles）+ profile 依赖 + agent-presets。
+   * 本地台账之外的权威状态，用于防重复安装（自带插件不会出现在商店台账里）。
+   */
+  const realInstalled = new Map<string, string | null>()
+  let clientPlugin: { version: string; install: string } | null = null
+  let heartbeatMin = 30
+  let comboLimit = 3
+  let comboReviewEnabled = true
+  let trendingSize = 20
+  let features = { trending: true, combos: true, announcements: true }
+  let authValid = false
+  let restored = false
+
+  const currentToken = () => opts.tokenStore?.current ?? null
+
+  const persistSources = async () => {
+    if (!opts.sourceStore) return
+    try {
+      await opts.sourceStore.set(
+        SOURCE_KEY,
+        JSON.stringify(
+          customSources.map((s) => ({
+            url: s.url,
+            name: s.name,
+            password: sourcePasswords.get(normUrl(s.url)) ?? '',
+            added_at: s.last_seen_at,
+          })),
+        ),
+      )
+      await opts.sourceStore.set(PRIMARY_KEY, activeBase)
+    } catch {
+      /* 持久化失败不影响本次会话 */
+    }
+  }
+
+  const restoreSources = async () => {
+    if (restored || !opts.sourceStore) return
+    restored = true
+    try {
+      const raw = await opts.sourceStore.get(SOURCE_KEY)
+      if (raw) {
+        const list = JSON.parse(raw) as Array<{ url?: string; name?: string; password?: string }>
+        customSources = list
+          .map((item) => ({ item, url: normUrl(item.url ?? '') }))
+          .filter((it) => it.url && /^https?:\/\//i.test(it.url))
+          .map(({ item, url }) => {
+            const password = item.password ?? ''
+            if (password) sourcePasswords.set(url, password)
+            return {
+              id: `custom:${url}`,
+              name: item.name || url,
+              url,
+              builtin: false,
+              enabled: true,
+              latency_ms: null,
+              cluster_id: null,
+              is_lb: false,
+              last_seen_at: null,
+              role: 'backup',
+              status: 'disconnected' as const,
+            }
+          })
+      }
+      const primary = normUrl((await opts.sourceStore.get(PRIMARY_KEY)) ?? '')
+      if (primary && /^https?:\/\//i.test(primary) && primary !== activeBase) {
+        activeBase = primary
+        source = makeSource(activeBase)
+      }
+    } catch {
+      /* 数据损坏时忽略，走默认源 */
+    }
+  }
+
+  const mergeSources = (): ServerSource[] => {
+    const map = new Map<string, ServerSource>()
+    const activeUrl = normUrl(activeBase)
+    const builtins = [...new Set([normUrl(opts.baseUrl), activeUrl])]
+    for (const url of builtins) {
+      const h = baseHealth.get(url)
+      const isActive = url === activeUrl
+      map.set(`builtin:${url}`, {
+        id: `builtin:${url}`,
+        name: url,
+        url,
+        builtin: true,
+        enabled: true,
+        latency_ms: h?.latency ?? null,
+        cluster_id: null,
+        is_lb: false,
+        last_seen_at: null,
+        role: isActive ? 'primary' : 'backup',
+        status: h ? (h.reachable ? 'connected' : 'unreachable') : isActive ? 'unreachable' : 'disconnected',
+      })
+    }
+    for (const s of [...nodeSources, ...customSources]) {
+      const key = normUrl(s.url) || s.id
+      if (map.has(key) || map.has(`builtin:${key}`)) continue
+      map.set(key, { ...s, role: key === activeUrl ? 'primary' : 'backup' })
+    }
+    return [...map.values()]
+  }
+
+  /** 裸 fetch 统一请求头：JWT（可选）+ 源服务器连接密码（可选）。 */
+  const authHeaders = (extra: Record<string, string> = {}): Record<string, string> => {
+    const out: Record<string, string> = { ...extra }
+    const t = currentToken()
+    if (t) out.Authorization = `Bearer ${t}`
+    const password = sourcePasswords.get(normUrl(activeBase)) ?? ''
+    if (password) out['X-Access-Password'] = password
+    return out
+  }
+
+  async function fetchCloud(): Promise<void> {
+    const t = currentToken()
+    if (!t) {
+      authValid = false
+      cloud = { plugins: [], combos: [] }
+      return
+    }
+    try {
+      const res = await dataFetch(currentBase() + API.meInstalls, { headers: authHeaders() })
+      authValid = res.ok
+      if (!res.ok) return
+      const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo'; version: string }>
+      cloud = {
+        plugins: [...new Set(list.filter((i) => i.type === 'plugin').map((i) => i.target))],
+        combos: [...new Set(list.filter((i) => i.type === 'combo').map((i) => i.target))],
+      }
+    } catch {
+      authValid = false
+    }
+  }
+
+  /** 拉取我点赞过的目标清单（登录后初始化已赞状态；离线时保持现状）。 */
+  async function fetchLiked(): Promise<void> {
+    const t = currentToken()
+    if (!t) {
+      likedTargets.clear()
+      return
+    }
+    try {
+      const res = await dataFetch(currentBase() + API.meLikes, { headers: authHeaders() })
+      if (!res.ok) return
+      const list = (await res.json()) as string[]
+      likedTargets.clear()
+      for (const x of list) likedTargets.add(x)
+    } catch {
+      /* 离线保持现状 */
+    }
+  }
+
+  /** 点赞 / 取消（切换式）：服务器返回最新计数与是否已赞；疑似刷赞进风控时明确报错。 */
+  async function doLike(target: string): Promise<{ count: number; liked: boolean }> {
+    const t = currentToken()
+    if (!t) throw new Error('请先登录 GitHub 后再点赞')
+    let res: Response
+    try {
+      res = await dataFetch(currentBase() + API.like, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ target }),
+      })
+    } catch {
+      throw new Error('点赞失败：服务端不可达')
+    }
+    const body = (await res.json().catch(() => null)) as
+      | { likes?: number; liked?: boolean; status?: string; reason?: string; message?: string }
+      | null
+    if (!res.ok) throw new Error(body?.message || '点赞失败，请稍后再试')
+    if (body?.status === 'pending') throw new Error('点赞待确认：' + (body.reason || '疑似刷赞，请稍后再试'))
+    if (typeof body?.likes !== 'number') throw new Error('点赞失败：服务器响应异常')
+    if (body.liked) likedTargets.add(target)
+    else likedTargets.delete(target)
+    return { count: body.likes, liked: !!body.liked }
+  }
+
+  /** 上传本地安装 + 订阅组到云端，并让内存中的 cloud 与上传结果保持一致。 */
+  async function syncCloud(): Promise<CloudList> {
+    const t = currentToken()
+    if (!t) {
+      cloud = { plugins: [], combos: [] }
+      return cloud
+    }
+    const body: Array<{ target: string; type: 'plugin' | 'combo'; version: string }> = Object.entries(toInstalledMap(ledger)).map(([target, version]) => ({
+      target,
+      type: 'plugin',
+      version,
+    }))
+    for (const c of Object.keys(subscriptions)) body.push({ target: c, type: 'combo', version: '1' })
+    try {
+      const res = await dataFetch(currentBase() + API.meInstalls, {
+        method: 'PUT',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ installs: body }),
+      })
+      authValid = res.ok
+      if (res.ok) {
+        const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo'; version: string }>
+        cloud = {
+          plugins: [...new Set(list.filter((i) => i.type === 'plugin').map((i) => i.target))],
+          combos: [...new Set(list.filter((i) => i.type === 'combo').map((i) => i.target))],
+        }
+      }
+    } catch {
+      /* 离线时至少让本地 UI 与本地台账一致 */
+      cloud = {
+        plugins: [...new Set(Object.keys(toInstalledMap(ledger)))],
+        combos: Object.keys(subscriptions),
+      }
+    }
+    return cloud
+  }
+
+  const installRecord = (pkg: string, version: string): InstallRecord => ({
+    pkg,
+    version,
+    installed_at: new Date().toISOString(),
+    source: 'single',
+    combo_id: null,
+    restore_point_id: null,
+  })
+
+  const latestVersion = (plugins: Plugin[], pkg: string): string => plugins.find((x) => x.id === pkg)?.version ?? '1.0.0'
+
+  /** 探测任意源地址（独立于当前主源），返回延迟与状态；失败自动重试一次。 */
+  const probeUrl = async (url: string): Promise<{ latency: number | null; status: ServerSource['status'] }> => {
+    const target = normUrl(url)
+    const password = sourcePasswords.get(target) ?? ''
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const t0 = Date.now()
+      try {
+        const ctrl = new AbortController()
+        const timer = setTimeout(() => ctrl.abort(), 6000)
+        const res = await dataFetch(target + '/health', {
+          headers: password ? { 'X-Access-Password': password } : {},
+          signal: ctrl.signal,
+        })
+        clearTimeout(timer)
+        if (res.ok) return { latency: Math.max(1, Date.now() - t0), status: 'connected' }
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 400))
+        else return { latency: null, status: res.status === 401 || res.status === 403 ? 'unreachable' : 'disconnected' }
+      } catch {
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 400))
+      }
+    }
+    return { latency: null, status: 'unreachable' }
+  }
+
+  /** 恢复本地持久缓存（幂等）：iframe 每次加载先出缓存界面，后台再增量同步。 */
+  const readCache = async (): Promise<void> => {
+    if (!opts.sourceStore || cacheLoaded) return
+    cacheLoaded = true
+    try {
+      const raw = await opts.sourceStore.get(CACHE_KEY)
+      if (!raw) return
+      const c = JSON.parse(raw) as CacheShape
+      if (!Array.isArray(c.plugins) || !Array.isArray(c.combos)) return
+      plugins = c.plugins
+      combos = c.combos
+      announcements = (c.announcements ?? []).filter((a) => !dismissedAnnos.has(a.id))
+      pluginsRevision = c.pluginsRevision
+      combosRevision = c.combosRevision
+      clientPlugin = c.clientPlugin ?? null
+      heartbeatMin = c.heartbeatMin ?? 30
+      comboLimit = c.comboLimit ?? 3
+      comboReviewEnabled = c.comboReviewEnabled !== false
+      trendingSize = c.trendingSize ?? 20
+    } catch {
+      /* 数据损坏时忽略 */
+    }
+  }
+
+  /** 持久化当前全量数据 + revision（下次打开秒开，后台增量）。 */
+  const writeCache = async (): Promise<void> => {
+    if (!opts.sourceStore) return
+    try {
+      await opts.sourceStore.set(
+        CACHE_KEY,
+        JSON.stringify({
+          plugins,
+          combos,
+          announcements,
+          pluginsRevision,
+          combosRevision,
+          clientPlugin,
+          heartbeatMin,
+          comboLimit,
+          comboReviewEnabled,
+          trendingSize,
+          ts: Date.now(),
+        }),
+      )
+    } catch {
+      /* 持久化失败不影响本次会话 */
+    }
+  }
+
+  /** 通知订阅者（后台同步完成后由 UI 层刷新界面）。 */
+  const notify = (): void => {
+    const s = state()
+    listeners.forEach((cb) => {
+      try {
+        cb(s)
+      } catch {
+        /* 订阅者异常不影响其他订阅者 */
+      }
+    })
+  }
+
+  /** 拉取真实已装清单（本地台账之外的权威状态；无 rpc 或失败时忽略）。 */
+  async function fetchRealInstalled(): Promise<void> {
+    realInstalled.clear()
+    if (!rpcBase) return
+    try {
+      const j = await rpcCall('/installed', {})
+      if (j && Array.isArray((j as { installed?: Array<{ name: string; version: string | null }> }).installed)) {
+        for (const item of (j as { installed: Array<{ name: string; version: string | null }> }).installed) {
+          if (item?.name) realInstalled.set(item.name, item.version ?? null)
+        }
+      }
+    } catch {
+      /* 预览模式/本地安装器未连接时忽略 */
+    }
+  }
+
+  /** 有效已装清单 = 本地台账 + 真实已装合并（真实优先补缺；未知版本按已装处理）。 */
+  const effectiveInstalled = (): Record<string, string> => {
+    const out = toInstalledMap(ledger)
+    for (const [name, ver] of realInstalled) {
+      if (!out[name]) out[name] = ver ?? '1.0.0'
+    }
+    return out
+  }
+
+  /** 应用增量：full 替换，否则按 id upsert 并处理墓碑。 */
+  const applyDelta = <T extends { id: string }>(current: T[], delta: Delta<T>): T[] => {
+    if (delta.full) return delta.items
+    const map = new Map(current.map((i) => [i.id, i]))
+    for (const item of delta.items) map.set(item.id, item)
+    for (const id of delta.tombstones) map.delete(id)
+    return [...map.values()]
+  }
+
+  /**
+   * 同步服务端数据（bootstrap 与周期 refresh 共用）：
+   * 1. 先恢复本地持久缓存（不阻塞界面）；
+   * 2. manifest 探测离线 → 保留缓存数据，只更新源健康状态；
+   * 3. 在线 → 按缓存 revision 增量拉取（失败全量兜底，仍失败保留缓存）。
+   */
+  const load = async () => {
+    await restoreSources()
+    await readCache()
+    if (opts.sourceStore && !annosRestored) {
+      annosRestored = true
+      try {
+        const raw = await opts.sourceStore.get(ANNO_DISMISS_KEY)
+        if (raw) {
+          const list = JSON.parse(raw) as string[]
+          list.forEach((id) => dismissedAnnos.add(id))
+        }
+      } catch {
+        /* 数据损坏时忽略 */
+      }
+    }
+    await ledger.load()
+    const health = await probeUrl(activeBase)
+    baseHealth.set(normUrl(activeBase), { reachable: health.status === 'connected', latency: health.latency })
+    const m = await source.fetchManifest()
+    // manifest 拉取失败（fallback software_version=0.0.0）视为离线：保留缓存数据。
+    const offline = m.software_version === '0.0.0'
+    if (!offline) {
+      clientPlugin = m.client_plugin ?? null
+      heartbeatMin = m.client_config?.data_heartbeat_min ?? 30
+      comboLimit = m.client_config?.combo_limit ?? 3
+      comboReviewEnabled = m.client_config?.combo_review_enabled !== false
+      trendingSize = m.client_config?.trending_size ?? 20
+      features = { trending: m.features?.trending !== false, combos: m.features?.combos !== false, announcements: m.features?.announcements !== false }
+      const sinceP = pluginsRevision && pluginsRevision !== m.plugins_revision ? pluginsRevision : undefined
+      const ps = await source.fetchPlugins(sinceP)
+      // 增量/全量失败时返回 fallback（full + 空 items + revision '0'）：保留缓存数据
+      if (!(ps.full && ps.items.length === 0 && ps.revision === '0')) {
+        plugins = applyDelta(plugins, ps)
+        pluginsRevision = ps.revision !== '0' ? ps.revision : m.plugins_revision
+      }
+      const sinceC = combosRevision && combosRevision !== m.combos_revision ? combosRevision : undefined
+      const cs = await source.fetchCombos(sinceC)
+      if (!(cs.full && cs.items.length === 0 && cs.revision === '0')) {
+        combos = applyDelta(combos, cs)
+        combosRevision = cs.revision !== '0' ? cs.revision : m.combos_revision
+      }
+      // 公告：网络返回空且缓存非空时保留缓存（服务器当前无公告是真实状态，两者都接受）。
+      const annos = await source.fetchAnnouncements()
+      if (annos.length > 0 || announcements.length === 0) {
+        announcements = annos.filter((a) => !dismissedAnnos.has(a.id))
+      }
+      nodeSources = await source.listNodes()
+    }
+    sources = mergeSources()
+    await fetchCloud()
+    await fetchLiked()
+    await fetchRealInstalled()
+    await writeCache()
+    startEvents()
+  }
+
+  const state = (): StoreState => {
+    const rawToken = currentToken()
+    const user =
+      authValid && rawToken
+        ? decodeJwt(rawToken) ?? (rawToken.startsWith('mock-') ? { login: rawToken.slice('mock-'.length), name: null } : null)
+        : null
+    return {
+      plugins,
+      combos,
+      announcements,
+      installed: effectiveInstalled(),
+      subscriptions: { ...subscriptions },
+      liked: Object.fromEntries([...likedTargets].map((t) => [t, true])),
+      // 实时合并而非读闭包变量：bootstrap 立即返回时也有内置源 + 已恢复的自定义源，
+      // 避免刷新后首次打开「我的」显示"暂无服务器源"。
+      sources: mergeSources(),
+      account: {
+        login: user?.login ?? '',
+        name: user?.name ?? null,
+        registered_at: '',
+        combo_quota: user ? `? / ${comboLimit}` : '',
+      },
+      cloud,
+      serverUrl: activeBase,
+      acked: { ...acked },
+      clientPlugin,
+      heartbeatMin,
+      comboReviewEnabled,
+      trendingSize,
+      features,
+    }
+  }
+
+  /** 强制重拉（心跳/SSE 事件共用）。 */
+  const doRefresh = async (): Promise<StoreState> => {
+    loadPromise = load()
+      .then(notify)
+      .catch(() => {})
+    await loadPromise
+    return state()
+  }
+
+  let eventSourceStarted = false
+
+  /**
+   * SSE 实时事件订阅（EventSource 自动重连）：
+   * - likes：本地更新对应插件/组合计数并通知 UI（无需重拉）；
+   * - plugins / announcements：触发增量刷新（revision 比对，变了才拉全量/增量）。
+   * 连接失败/不支持时静默降级——30 分钟心跳兜底不受影响。
+   */
+  function startEvents(): void {
+    if (eventSourceStarted || typeof EventSource === 'undefined' || !rpcBase) return
+    eventSourceStarted = true
+    try {
+      const es = new EventSource(currentBase() + API.events)
+      es.addEventListener('likes', (e) => {
+        try {
+          const d = JSON.parse(String((e as MessageEvent).data)) as { target?: string; likes?: number }
+          const target = d.target
+          const likes = d.likes
+          if (typeof target !== 'string' || typeof likes !== 'number') return
+          plugins = plugins.map((p) => (p.repo === target ? { ...p, likes } : p))
+          combos = combos.map((c) => (c.id === target ? { ...c, likes } : c))
+          notify()
+        } catch {
+          /* 坏事件忽略 */
+        }
+      })
+      es.addEventListener('plugins', () => void doRefresh())
+      es.addEventListener('announcements', () => void doRefresh())
+      // 组合更新不实时推送(省服务器资源)：客户端按心跳周期拉取,无需 combos 事件。
+    } catch {
+      /* 环境不支持时静默，心跳兜底 */
+    }
+  }
+
+  return {
+    /**
+     * 首次加载：先恢复缓存立即返回（界面秒开），同时后台启动全量/增量同步，
+     * 完成后通过 subscribe 通知 UI 刷新。
+     */
+    async bootstrap() {
+      // 先恢复本地自定义源/主源（幂等），让"我的 → 服务器源"立即有数据。
+      await restoreSources()
+      await readCache()
+      if (!loadStarted) {
+        loadStarted = true
+        loadPromise = load()
+          .then(notify)
+          .catch(() => {})
+      }
+      return state()
+    },
+    refresh: doRefresh,
+    subscribe(cb) {
+      listeners.add(cb)
+      return () => {
+        listeners.delete(cb)
+      }
+    },
+    async pushCloud() {
+      if (!loadStarted) {
+        loadStarted = true
+        loadPromise = load()
+          .then(notify)
+          .catch(() => {})
+      }
+      await loadPromise
+      return syncCloud()
+    },
+    async install(pkg) {
+      // 防重复安装：本地台账或真实已装（含 DSH 自带插件）中已存在 → 幂等跳过。
+      if (effectiveInstalled()[pkg]) return effectiveInstalled()
+      const p = plugins.find((x) => x.id === pkg)
+      await rpcCall('/install', {
+        pkg,
+        version: p?.version ?? latestVersion(plugins, pkg),
+        install: p?.install ?? '',
+        repoUrl: p?.repo_url ?? '',
+      })
+      await ledger.addInstall(installRecord(pkg, latestVersion(plugins, pkg)))
+      realInstalled.set(pkg, latestVersion(plugins, pkg))
+      await syncCloud()
+      void source.reportInstall(pkg)
+      return effectiveInstalled()
+    },
+    like: doLike,
+    async installPreset(pkg, presetName) {
+      // 防重复安装：已装且版本一致 → 幂等跳过；版本不同（更新 Agent）→ 执行。
+      const p = plugins.find((x) => x.id === pkg)
+      const target = p?.version ?? '1.0.0'
+      const cur = effectiveInstalled()[pkg]
+      if (cur && cur === target) return effectiveInstalled()
+      await rpcCall('/preset', {
+        pkg,
+        presetName: presetName ?? p?.preset_name ?? p?.name ?? pkg,
+        repoUrl: p?.repo_url ?? '',
+      })
+      await ledger.addInstall({ ...installRecord(pkg, target), source: 'single' })
+      realInstalled.set(pkg, target)
+      await syncCloud()
+      void source.reportInstall(pkg)
+      return effectiveInstalled()
+    },
+    async uninstall(pkg) {
+      const p = plugins.find((x) => x.id === pkg)
+      await rpcCall('/uninstall', {
+        pkg,
+        install: p?.install ?? '',
+        repoUrl: p?.repo_url ?? '',
+        presetName: p?.preset_name ?? p?.name ?? pkg,
+      })
+      await ledger.removeInstall(pkg)
+      await syncCloud()
+      return toInstalledMap(ledger)
+    },
+    async update(pkg) {
+      const p = plugins.find((x) => x.id === pkg)
+      await rpcCall('/update', {
+        pkg,
+        version: p?.version ?? latestVersion(plugins, pkg),
+        install: p?.install ?? '',
+        repoUrl: p?.repo_url ?? '',
+      })
+      await ledger.addInstall(installRecord(pkg, latestVersion(plugins, pkg)))
+      acked[pkg] = latestVersion(plugins, pkg)
+      await syncCloud()
+      void source.reportInstall(pkg)
+      return toInstalledMap(ledger)
+    },
+    async installCombo(name) {
+      subscriptions[name] = true
+      const c = combos.find((x) => x.name === name)
+      const manual: ManualInstallItem[] = []
+      if (c) {
+        const current = effectiveInstalled()
+        for (const m of c.members) {
+          // 防重复安装：已装成员跳过（组合=订阅+补装缺失，不重复装已装成员）。
+          if (current[m.pkg]) continue
+          if (m.install_mode === 'manual') {
+            // 手动安装成员：不自动装,收集清单让用户逐个打开插件页面
+            const p = plugins.find((x) => x.id === m.pkg)
+            manual.push({
+              pkg: m.pkg,
+              name: p?.name ?? m.pkg,
+              url: p?.repo_url && p.repo_url.startsWith('http') ? p.repo_url : `https://github.com/search?q=${encodeURIComponent(m.pkg)}&type=repositories`,
+            })
+            continue
+          }
+          const p = plugins.find((x) => x.id === m.pkg)
+          await rpcCall('/install', {
+            pkg: m.pkg,
+            version: p?.version ?? latestVersion(plugins, m.pkg),
+            install: p?.install ?? '',
+            repoUrl: p?.repo_url ?? '',
+          })
+          await ledger.addInstall(installRecord(m.pkg, latestVersion(plugins, m.pkg)))
+          void source.reportInstall(m.pkg)
+        }
+      }
+      await syncCloud()
+      return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions }, manual }
+    },
+    async unsubscribe(name) {
+      delete subscriptions[name]
+      await syncCloud()
+      return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
+    },
+    async removeAnnouncement(id) {
+      dismissedAnnos.add(id)
+      announcements = announcements.filter((a) => a.id !== id)
+      if (opts.sourceStore) {
+        try {
+          await opts.sourceStore.set(ANNO_DISMISS_KEY, JSON.stringify([...dismissedAnnos]))
+        } catch {
+          /* 持久化失败不影响本次会话 */
+        }
+      }
+      return announcements
+    },
+    async addSource(url, password) {
+      await restoreSources()
+      const trimmed = normUrl(url)
+      if (!/^https?:\/\//i.test(trimmed)) return sources
+      if (password) sourcePasswords.set(trimmed, password)
+      const probe = await probeUrl(trimmed)
+      const entry: ServerSource = {
+        id: `custom:${trimmed}`,
+        name: trimmed,
+        url: trimmed,
+        builtin: false,
+        enabled: true,
+        latency_ms: probe.latency,
+        cluster_id: null,
+        is_lb: false,
+        last_seen_at: new Date().toISOString(),
+        role: 'backup',
+        status: probe.status,
+      }
+      customSources = [...customSources.filter((s) => normUrl(s.url) !== trimmed), entry]
+      await persistSources()
+      sources = mergeSources()
+      return sources
+    },
+    async removeSource(id) {
+      await restoreSources()
+      const removed = customSources.find((s) => s.id === id) ?? sources.find((s) => s.id === id)
+      customSources = customSources.filter((s) => s.id !== id)
+      if (removed && !removed.builtin) sourcePasswords.delete(normUrl(removed.url))
+      await persistSources()
+      sources = mergeSources()
+      return sources
+    },
+    async pingSource(id) {
+      const target = mergeSources().find((s) => s.id === id)
+      if (!target) return sources
+      const probe = await probeUrl(target.url)
+      if (target.builtin) {
+        baseHealth.set(normUrl(target.url), { reachable: probe.status === 'connected', latency: probe.latency })
+      }
+      customSources = customSources.map((s) =>
+        s.id === id ? { ...s, latency_ms: probe.latency, status: probe.status, last_seen_at: new Date().toISOString() } : s,
+      )
+      nodeSources = nodeSources.map((s) =>
+        s.id === id ? { ...s, latency_ms: probe.latency, status: probe.status, last_seen_at: new Date().toISOString() } : s,
+      )
+      await persistSources()
+      sources = mergeSources()
+      return sources
+    },
+    async switchSource(id) {
+      await restoreSources()
+      const target = mergeSources().find((s) => s.id === id)
+      if (!target) return state()
+      // 换源规则（v3.4）：切到独立源自动登出 GitHub（本地数据保留）；切到 LB 集群内源保持登录。
+      if (target.is_lb === false && opts.tokenStore) opts.tokenStore.current = null
+      activeBase = normUrl(target.url)
+      source = makeSource(activeBase)
+      await persistSources()
+      await load()
+      return state()
+    },
+    async addCombo(name, desc, members) {
+      const t = currentToken()
+      if (!t) throw new Error('请先登录 GitHub 后再发布组合')
+      let res: Response
+      try {
+        res = await dataFetch(currentBase() + API.createCombo, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ name, description: desc, members }),
+        })
+      } catch {
+        throw new Error('发布失败：服务端不可达')
+      }
+      if (!res.ok) {
+        let msg = '发布失败，请稍后再试'
+        try {
+          const body = (await res.json()) as { message?: string }
+          if (body.message) msg = body.message
+        } catch {
+          /* 保留默认错误 */
+        }
+        throw new Error(msg)
+      }
+      const created = (await res.json()) as Combo
+      combos = [...combos, created]
+      return combos
+    },
+    async updateCombo(id, name, desc, members) {
+      const t = currentToken()
+      if (!t) throw new Error('请先登录 GitHub 后再编辑组合')
+      let res: Response
+      try {
+        res = await dataFetch(currentBase() + API.createCombo + '/' + encodeURIComponent(id), {
+          method: 'PUT',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ name, description: desc, members }),
+        })
+      } catch {
+        throw new Error('保存失败：服务端不可达')
+      }
+      if (!res.ok) {
+        let msg = '保存失败：组合不存在或不是你的组合'
+        try {
+          const body = (await res.json()) as { message?: string }
+          if (body.message) msg = body.message
+        } catch {
+          /* 保留默认错误 */
+        }
+        throw new Error(msg)
+      }
+      const updated = (await res.json()) as Combo
+      combos = combos.map((c) => (c.id === id ? updated : c))
+      return combos
+    },
+    async removeCombo(id) {
+      const t = currentToken()
+      if (!t) throw new Error('请先登录 GitHub 后再删除组合')
+      let res: Response
+      try {
+        res = await dataFetch(currentBase() + API.createCombo + '/' + encodeURIComponent(id), {
+          method: 'DELETE',
+          headers: authHeaders(),
+        })
+      } catch {
+        throw new Error('删除失败：服务端不可达')
+      }
+      if (!res.ok) {
+        let msg = '删除失败：组合不存在或不是你的组合'
+        try {
+          const body = (await res.json()) as { message?: string }
+          if (body.message) msg = body.message
+        } catch {
+          /* 保留默认错误 */
+        }
+        throw new Error(msg)
+      }
+      const body = (await res.json()) as { combos?: Combo[] }
+      if (body.combos) combos = body.combos
+      return combos
+    },
+    async reportMissing(pkg, repoUrl, version) {
+      const t = currentToken()
+      if (!t) return { ok: false, message: '请先登录后再上报插件信息' }
+      try {
+        const res = await dataFetch(currentBase() + API.reportMissing, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ pkg, repo_url: repoUrl, version }),
+        })
+        if (!res.ok) return { ok: false, message: '上报失败，请稍后再试' }
+        const body = (await res.json()) as { message?: string }
+        return { ok: true, message: body.message ?? '已上报，等待管理员收录' }
+      } catch {
+        return { ok: false, message: '上报失败：服务端不可达' }
+      }
+    },
+    async updateClientPlugin(spec, version) {
+      // 客户端插件自身更新：走 Host 本地安装器 /client RPC（生产环境执行真实 dsh plugin add）。
+      const r = await rpcCall('/client', { install: spec, version })
+      return { ok: true, message: r.message || `已开始在线更新：dsh plugin add ${spec}@${version}` }
+    },
+    async deleteAccount(combos) {
+      const t = currentToken()
+      if (!t) return { ok: false, message: '请先登录后再注销账号' }
+      try {
+        const res = await dataFetch(currentBase() + API.meDeactivate, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ combos }),
+        })
+        if (!res.ok) return { ok: false, message: '注销失败，请稍后再试' }
+        const body = (await res.json()) as { message?: string }
+        return { ok: true, message: body.message ?? '账号已注销' }
+      } catch {
+        return { ok: false, message: '注销失败：服务端不可达' }
+      }
+    },
+    async restorePlugins(ps) {
+      const failures: string[] = []
+      const current = effectiveInstalled()
+      for (const p of ps) {
+        // 防重复安装：已装插件跳过恢复。
+        if (current[p]) continue
+        const item = plugins.find((x) => x.id === p)
+        try {
+          await rpcCall('/install', {
+            pkg: p,
+            version: item?.version ?? latestVersion(plugins, p),
+            install: item?.install ?? '',
+            repoUrl: item?.repo_url ?? '',
+          })
+          await ledger.addInstall(installRecord(p, latestVersion(plugins, p)))
+          realInstalled.set(p, latestVersion(plugins, p))
+          void source.reportInstall(p)
+        } catch (e) {
+          failures.push(`${p}：${String((e as Error)?.message ?? e)}`)
+        }
+      }
+      await syncCloud()
+      if (failures.length > 0) {
+        throw new Error(`部分插件恢复失败（${failures.length}/${ps.length}）\n${failures.slice(0, 3).join('\n')}`)
+      }
+      return { installed: effectiveInstalled(), subscriptions: { ...subscriptions } }
+    },
+    async restoreSubscriptions(cs) {
+      const failures: string[] = []
+      for (const name of cs) {
+        subscriptions[name] = true
+        const c = combos.find((x) => x.name === name)
+        if (!c) continue
+        const current = effectiveInstalled()
+        for (const m of c.members) {
+          // 防重复安装：已装成员跳过恢复。
+          if (current[m.pkg]) continue
+          const item = plugins.find((x) => x.id === m.pkg)
+          const memberVersion = item?.version ?? (m.version && m.version !== '*' ? m.version : latestVersion(plugins, m.pkg))
+          try {
+            await rpcCall('/install', {
+              pkg: m.pkg,
+              version: memberVersion,
+              install: item?.install ?? '',
+              repoUrl: item?.repo_url ?? '',
+            })
+            await ledger.addInstall(installRecord(m.pkg, latestVersion(plugins, m.pkg)))
+            realInstalled.set(m.pkg, latestVersion(plugins, m.pkg))
+            void source.reportInstall(m.pkg)
+          } catch (e) {
+            failures.push(`${m.pkg}：${String((e as Error)?.message ?? e)}`)
+          }
+        }
+      }
+      await syncCloud()
+      if (failures.length > 0) {
+        throw new Error(`部分组合成员恢复失败（${failures.length}）：\n${failures.slice(0, 3).join('\n')}`)
+      }
+      return { installed: effectiveInstalled(), subscriptions: { ...subscriptions } }
+    },
+    async ackUpdate(pkg) {
+      acked[pkg] = latestVersion(plugins, pkg)
+      return { ...acked }
+    },
+    async ackAll() {
+      const inst = toInstalledMap(ledger)
+      for (const [pkg, iv] of Object.entries(inst)) {
+        const p = plugins.find((x) => x.id === pkg)
+        if (p && isUpdateAvailable(iv, p.version)) acked[pkg] = p.version
+      }
+      return { ...acked }
+    },
+  }
+}

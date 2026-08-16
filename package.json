@@ -1,7 +1,7 @@
 {
   "name": "dsh-storecloud",
   "version": "0.1.0",
-  "description": "DSH 插件商城 · 用户端（dsh-store 客户端）：悬浮球 / 设置页 / 会话视图三入口 + 本地安装器 RPC + 反向代理桥。配套服务端见 dsh-store-server。",
+  "description": "DSH 插件商城 · 用户端统一仓库（源码 + 产物）：悬浮球 / 设置页 / 会话视图三入口 + 本地安装器 RPC + 反向代理桥。配套服务端见 dsh-store-server。",
   "type": "commonjs",
   "main": "./lib/index.js",
   "exports": {
@@ -15,6 +15,9 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
+  ],
+  "workspaces": [
+    "packages/*"
   ],
   "dsh": {
     "bundle": {
@@ -32,9 +35,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "pack": "npm pack",
-    "typecheck": "node --check lib/index.js && node --check lib/client.js"
+    "build": "npm run build --workspaces && node scripts/build.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present && node --check lib/index.js && node --check lib/client.js",
+    "smoke": "node smoke-test.mjs",
+    "verify:client": "node scripts/verify-client.mjs",
+    "pack": "npm pack"
   },
   "keywords": [
     "dsh",
@@ -47,6 +52,12 @@
   ],
   "license": "BSD-3-Clause",
   "devDependencies": {
-    "esbuild": "^0.23.0"
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.23.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.4"
   }
 }

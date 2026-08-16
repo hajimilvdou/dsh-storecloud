@@ -1,6 +1,6 @@
 # dsh-storecloud
 
-DSH 插件商城 · **用户端**（dsh-store 客户端），一键安装的 DSH 插件包。
+DSH 插件商城 · **用户端统一仓库**（源码 + 编译产物一体）。安装后提供：
 
 - 🧩 **三处入口**：悬浮球（shell.overlay）/ 设置页 section / 会话视图 tab，各自可在商城内「我的」页开关；
 - 🔌 **本地安装器**：商城内「安装」直接执行 `dsh plugin add`，Agent 预设安装到 `~/.dsh/.agent-presets/`；
@@ -16,14 +16,15 @@ DSH 插件商城 · **用户端**（dsh-store 客户端），一键安装的 DSH
 ## 一键安装（npm）
 
 ```bash
-# 方式 A：官方装配命令（推荐）——等价于在该 profile 里执行 pnpm add
+# 方式 A：官方装配命令（推荐）——装完重启 DSH web 进程即可
 dsh plugin --profile web add dsh-storecloud
 
-# 方式 B：直接用包管理器装到 profile（效果相同）
-cd ~/.dsh/profiles/web && pnpm add dsh-storecloud
-
-# 方式 C：本地 tarball（离线 / 先试装）
+# 方式 B：本地 tarball / git 仓库
 dsh plugin --profile web add ./dsh-storecloud-0.1.0.tgz
+dsh plugin --profile web add github:hajimilvdou/dsh-storecloud
+
+# 方式 C：直接 pnpm 装进 profile（等价）
+cd ~/.dsh/profiles/web && pnpm add dsh-storecloud
 ```
 
 装完 **重启 DSH web 进程**（bundle 层在启动时装配）。重启后：
@@ -36,6 +37,50 @@ dsh plugin --profile web add ./dsh-storecloud-0.1.0.tgz
 ```bash
 dsh plugin --profile web remove dsh-storecloud
 ```
+
+> ⚠️ Windows 注意：tarball/目录路径含空格时 `dsh plugin add` 的 cmd 拼接会失败，
+> 请用不含空格的路径（npm 包名安装不受影响）。
+
+---
+
+## 仓库结构（源码 + 产物统一）
+
+```
+dsh-storecloud/
+├── packages/                # 📦 源码（改 bug 在这里改）
+│   ├── shared/              #   @dsh-store/shared —— 跨端契约（协议/模型/API/配置）
+│   └── client/              #   @dsh-store/client —— 商城 UI（React）+ 数据层/台账/核心纯函数
+├── docs/                    # 设计文档（v3 ~ v3.7）与界面原型
+├── lib/
+│   ├── index.js             # 产物 · host 半（Node cordis 插件）：路由/反代/RPC/静态资源
+│   └── client.js            # 产物 · client 半（浏览器）：三入口槽位（零依赖，类组件 + 手写 ReactElement）
+├── preview/                 # 产物 · 商城 UI 静态资源（preview.html + preview.js，由 packages 构建）
+├── cordis.patch.yml         # bundle 层：插入本插件 loader 行
+├── scripts/
+│   ├── build.mjs            # 全链路构建：tsc workspaces → esbuild preview → 语法检查
+│   └── verify-client.mjs    # 客户端半渲染自检（真实 React 渲染三槽位）
+├── smoke-test.mjs           # 冒烟测试（core 纯函数 + mock 桥接全链路）
+└── preview-server.mjs       # 本地预览服务器（http://127.0.0.1:4173）
+```
+
+**npm 发布物（tarball）只含产物**：`lib/` + `preview/` + `cordis.patch.yml` + `README.md` + `LICENSE`（`files` 白名单）；
+**GitHub 仓库含全部源码**：`packages/` + `docs/` + 产物一起提交，随时可重新构建。
+
+---
+
+## 开发 / 修 bug
+
+```bash
+npm install                # 安装构建依赖（tsc / esbuild / react 类型）
+npm run build              # 全链路：tsc → esbuild → preview/preview.js
+npm run typecheck          # 源码类型检查 + lib 语法检查
+npm run smoke              # 冒烟测试
+npm run verify:client      # 客户端半渲染自检
+npm pack                   # 产出发布 tarball
+```
+
+改 bug 流程：改 `packages/client/src/**`（UI/数据层）→ `npm run build` → 产物 `preview/preview.js` 更新；
+改壳层（入口/安装器）→ 直接改 `lib/index.js` / `lib/client.js`。重新发布：`npm pack` + 上传 tarball / push git。
 
 ---
 
@@ -56,38 +101,8 @@ dsh plugin --profile web remove dsh-storecloud
 环境变量兜底：`DSH_STORE_SERVER_URL`（服务器地址）、`DSH_HOME`（家目录）。
 页面内也支持 `?server=<url>` 临时切换服务器（存 localStorage）。
 
----
-
-## 包结构
-
-```
-dsh-storecloud/
-├── lib/
-│   ├── index.js      # host 半（Node cordis 插件）：路由 / 反代 / RPC / 静态资源
-│   └── client.js     # client 半（浏览器）：三入口槽位（零依赖，类组件 + 手写 ReactElement）
-├── preview/          # 商城 UI 静态资源（preview.html + preview.js，由 dsh-store 工作区构建）
-├── cordis.patch.yml  # bundle 层：插入本插件 loader 行
-└── scripts/
-    ├── build.mjs     # 从 ../dsh-store 重新构建并打包 preview
-    └── verify-client.mjs  # 客户端半渲染自检（真实 React 渲染三槽位）
-```
-
 **隐私说明**：本包不含任何机器相关路径 / 凭据 / 个人信息。DSH 家目录与 CLI 路径全部运行时探测
 （`$DSH_HOME` 或 `~/.dsh`）；唯一的外部地址是默认服务器 `https://blog.1qwq1.top`（官方公开源，可配置替换）。
-
----
-
-## 开发
-
-```bash
-npm install                # 仅需 esbuild（构建 preview 用）
-npm run build              # 重新构建 preview（依赖 ../dsh-store 工作区）
-node scripts/verify-client.mjs   # 客户端半渲染自检
-npm pack                   # 产出发布 tarball
-```
-
-设计文档与客户端源码（React 版 UI / 数据层 / 契约）在 [dsh-store](https://github.com/hajimilvdou/dsh-store) 工作区。
-`lib/client.js` 是 shell 的独立零依赖实现，行为与 dsh-store-shell 一致。
 
 ---
 
