@@ -385,11 +385,20 @@ export function StoreApp(props: {
   }
   /* 点赞功能已取消：客户端无入口,服务端 /api/v1/likes 由 feature.likes 门控(旧客户端兼容)。 */
   const doAddCombo = (name: string, desc: string, members: ComboMemberInput[]) =>
-    void props.bridge.addCombo(name, desc, members).then(setCombos).catch(function (e) { window.alert(String((e && e.message) || e)) })
+    void props.bridge.addCombo(name, desc, members).then((cs) => {
+      setCombos(cs)
+      void props.bridge.refreshCombos().then(applyState)
+    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
   const doUpdateCombo = (id: string, name: string, desc: string, members: ComboMemberInput[]) =>
-    void props.bridge.updateCombo(id, name, desc, members).then(setCombos).catch(function (e) { window.alert(String((e && e.message) || e)) })
+    void props.bridge.updateCombo(id, name, desc, members).then((cs) => {
+      setCombos(cs)
+      void props.bridge.refreshCombos().then(applyState)
+    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
   const doRemoveCombo = (id: string) =>
-    void props.bridge.removeCombo(id).then(setCombos).catch(function (e) { window.alert(String((e && e.message) || e)) })
+    void props.bridge.removeCombo(id).then((cs) => {
+      setCombos(cs)
+      void props.bridge.refreshCombos().then(applyState)
+    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
   const doReport = (pkg: string, repoUrl: string | null, version: string) =>
     props.bridge.reportMissing(pkg, repoUrl, version)
   const doClientUpdate = (spec: string, version: string) =>
@@ -534,7 +543,15 @@ export function StoreApp(props: {
   const tabBtns = (['plugin', 'combo', 'agent', 'my', 'sub', 'agentLib'] as Tab[])
     .filter((k) => !(k === 'combo' || k === 'sub') || features.combos)
     .map((k) => (
-      <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+      <button
+        key={k}
+        className={tab === k ? 'on' : ''}
+        onClick={() => {
+          setTab(k)
+          // 组合在线模式：进入组合/组合库页即向服务器拉取组合全量（覆盖本地缓存）
+          if (k === 'combo' || k === 'sub') void props.bridge.refreshCombos().then(applyState)
+        }}
+      >
         {k === 'plugin' ? '插件' : k === 'combo' ? '组合' : k === 'agent' ? 'Agent' : k === 'my' ? '插件库' : k === 'sub' ? '组合库' : 'Agent库'}
       </button>
     ))

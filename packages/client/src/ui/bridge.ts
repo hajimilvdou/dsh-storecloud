@@ -58,6 +58,12 @@ export interface StoreBridge {
   /** 强制重拉服务端数据（周期心跳用；与 bootstrap 结果同构）。 */
   refresh(): Promise<StoreState>
   /**
+   * 组合在线刷新（组合在线模式）：打开组合页/组合操作后调用——
+   * 直接向服务器拉取组合全量（会话内 60s 复用，覆盖任何本地缓存），
+   * 保证「我的组合/推荐组合」始终是服务器权威数据，不依赖本地持久缓存与 revision 增量。
+   */
+  refreshCombos(): Promise<StoreState>
+  /**
    * 订阅数据变化：bootstrap 的后台全量/增量同步、refresh、换源等完成后通知。
    * 返回取消订阅函数。HTTP 桥接在后台同步完成后调用；未实现时可省略。
    */
@@ -222,6 +228,9 @@ export function mockBridge(): StoreBridge {
     async refresh() {
       ready = load()
       await ready
+      return state()
+    },
+    async refreshCombos() {
       return state()
     },
     subscribe() {
@@ -561,6 +570,34 @@ export function httpBridge(opts: {
   /** 已知内置源的健康状态（默认源 + 曾切换过的源都保留在列表里，便于切回）。 */
   const baseHealth = new Map<string, { reachable: boolean; latency: number | null }>()
   const subscriptions: Record<string, boolean> = {}
+  /** 订阅持久化（组合在线模式：未登录也本地收藏；登录后与云端合并上云）。 */
+  const SUB_KEY = 'dsh-store:http:subs:v1'
+  let subsRestored = false
+  const persistSubs = async (): Promise<void> => {
+    if (!opts.sourceStore) return
+    try {
+      await opts.sourceStore.set(SUB_KEY, JSON.stringify(Object.keys(subscriptions)))
+    } catch {
+      /* 持久化失败不影响本次会话 */
+    }
+  }
+  const restoreSubs = async (): Promise<void> => {
+    if (!opts.sourceStore || subsRestored) return
+    subsRestored = true
+    try {
+      const raw = await opts.sourceStore.get(SUB_KEY)
+      if (raw) {
+        const list = JSON.parse(raw) as string[]
+        for (const n of list) if (typeof n === 'string' && n) subscriptions[n] = true
+      }
+    } catch {
+      /* 数据损坏时忽略 */
+    }
+  }
+  /** 组合在线刷新：in-flight 去重 + 会话内 60s 复用（打开组合页/组合操作后调用）。 */
+  let combosFetching: Promise<void> | null = null
+  let combosFetchedAt = 0
+  const COMBO_FRESH_MS = 60000
   const acked: Record<string, string> = {}
   let cloud: CloudList = { plugins: [], combos: [] }
   /** 我已点赞的目标集合（登录后从 GET /api/v1/me/likes 初始化，点赞/取消即时增删）。 */
@@ -701,6 +738,9 @@ export function httpBridge(opts: {
         plugins: [...new Set(list.filter((i) => i.type === 'plugin').map((i) => i.target))],
         combos: [...new Set(list.filter((i) => i.type === 'combo').map((i) => i.target))],
       }
+      // 云端订阅合并进本地订阅（多端一致）：其他设备订阅的组合本机也标记已订阅
+      for (const i of list) if (i.type === 'combo' && i.target) subscriptions[i.target] = true
+      await persistSubs()
     } catch {
       // 网络异常：保留登录态（token 未失效），连接恢复后自动续上
     }
@@ -1069,6 +1109,7 @@ export function httpBridge(opts: {
       // 先恢复本地自定义源/主源（幂等），让"我的 → 服务器源"立即有数据。
       await restoreSources()
       await readCache()
+      await restoreSubs()
       // 乐观登录恢复：本地存在可解码的 token 即先恢复登录态（iframe 重建/切页回来不闪烁、不掉线），
       // 后台 load 会向服务器校验；只有服务器明确 401/403 才真正登出并清 token。
       if (!authValid) {
@@ -1086,6 +1127,36 @@ export function httpBridge(opts: {
       return state()
     },
     refresh: doRefresh,
+    /** 组合在线刷新：直接向服务器拉取组合全量（会话内 60s 复用 + in-flight 去重），
+     *  覆盖本地缓存，保证「我的组合/推荐组合」为服务器权威数据。 */
+    async refreshCombos() {
+      await restoreSubs()
+      if (combosFetching) {
+        await combosFetching
+        notify()
+        return state()
+      }
+      const now = Date.now()
+      if (now - combosFetchedAt < COMBO_FRESH_MS) return state()
+      combosFetchedAt = now
+      combosFetching = (async () => {
+        try {
+          // 无 since 参数 = 服务器全量返回（组合数据量小，在线模式直接全量）
+          const cs = await source.fetchCombos()
+          if (!(cs.full && cs.items.length === 0 && cs.revision === '0')) {
+            combos = applyDelta(combos, cs)
+            combosRevision = cs.revision !== '0' ? cs.revision : combosRevision
+            await writeCache()
+          }
+        } catch {
+          /* 在线刷新失败：保留现有数据（会话缓存），下次打开再试 */
+        }
+      })()
+      await combosFetching
+      combosFetching = null
+      notify()
+      return state()
+    },
     subscribe(cb) {
       listeners.add(cb)
       return () => {
@@ -1164,6 +1235,7 @@ export function httpBridge(opts: {
     },
     async installCombo(name) {
       subscriptions[name] = true
+      await persistSubs()
       const c = combos.find((x) => x.name === name)
       const manual: ManualInstallItem[] = []
       if (c) {
@@ -1197,6 +1269,7 @@ export function httpBridge(opts: {
     },
     async unsubscribe(name) {
       delete subscriptions[name]
+      await persistSubs()
       await syncCloud()
       return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
     },
