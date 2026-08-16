@@ -598,6 +598,7 @@ export function StoreApp(props: {
         storeLocs={storeLocs}
         onSetLoc={doSetLoc}
         serverUrl={serverUrl || props.serverUrl}
+        heartbeatMin={data?.heartbeatMin ?? 30}
         clientVersion={CLIENT_PLUGIN_VERSION}
         clientUpdate={clientUpdate}
         onClose={() => setAcct(false)}

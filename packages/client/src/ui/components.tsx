@@ -564,6 +564,8 @@ export function AccountDrawer(props: {
   /** 切换放置位置(写 localStorage + 通知壳侧)。 */
   onSetLoc?: (key: 'fab' | 'section' | 'header', on: boolean) => void
   serverUrl?: string
+  /** 组合/数据更新频率（分钟，服务端配置下发，客户端按此心跳拉取）。 */
+  heartbeatMin?: number
   /** 客户端插件自身版本（本地常量）与可用的新版本。 */
   clientVersion: string
   clientUpdate: { version: string; install: string } | null
@@ -689,6 +691,11 @@ export function AccountDrawer(props: {
             <span className="dshs-nm" style={{ fontWeight: 600 }}>🌐 服务端</span>
             <span className="dshs-compat">{props.serverUrl ?? ''}</span>
           </div>
+          <div className="dshs-mem">
+            <span className="dshs-nm" style={{ fontWeight: 600 }}>📡 组合更新频率</span>
+            <span className="dshs-compat">每 {props.heartbeatMin ?? 30} 分钟</span>
+          </div>
+          <div className="dshs-subnote">组合/插件数据按此周期自动刷新（服务端下发）；可在服务端管理端「配置中心 → 客户端更新频率」调整。</div>
           <div className="dshs-subnote">数据通道(浏览/安装插件)不登录也能用；登录仅用于云端同步与社区功能。</div>
           <div className="dshs-subnote" style={{ marginTop: 4 }}>云端插件在「插件库」页，云端订阅组在「订阅」页，均默认折叠。</div>
 
@@ -753,6 +760,11 @@ export function AccountDrawer(props: {
         <div className="dshs-subnote" style={{ marginTop: 10 }}>
           ☁️ 云端插件已移到「插件库」页，云端订阅组已移到「订阅」页，默认折叠，点击即可展开。
         </div>
+        <div className="dshs-mem" style={{ marginTop: 8 }}>
+          <span className="dshs-nm" style={{ fontWeight: 600 }}>📡 组合更新频率</span>
+          <span className="dshs-compat">每 {props.heartbeatMin ?? 30} 分钟（服务端配置）</span>
+        </div>
+        <div className="dshs-subnote">组合/插件数据按此周期自动刷新；调整位置：服务端管理端 → 配置中心 →「客户端更新频率」。</div>
 
         {locsManager}
 
