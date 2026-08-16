@@ -56,7 +56,7 @@ class Boundary extends Component<{ children: ReactNode }, { err: Error | null }>
 
 /**
  * 浏览器独立预览入口：
- * - 默认连接真实源 https://blog.1qwq1.top（?mode=demo 强制演示数据）；
+ * - 默认连接作者的服务器（?mode=demo 强制演示数据）；
  * - `?server=http://127.0.0.1:8080` 可临时指向本地/自建源；
  * - 登录 token、源密码、自定义源清单与数据缓存保存在 localStorage；
  * - 界面立即渲染（本地缓存秒开/空态骨架），全量/增量同步在后台进行。

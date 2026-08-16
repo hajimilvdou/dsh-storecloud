@@ -43,6 +43,7 @@
   },
   "keywords": [
     "dsh",
+    "dsh-plugin",
     "cordis",
     "plugin",
     "store",
@@ -50,7 +51,7 @@
     "plugin-store",
     "deepseek"
   ],
-  "license": "BSD-3-Clause",
+  "license": "CC-BY-NC-SA-4.0",
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",

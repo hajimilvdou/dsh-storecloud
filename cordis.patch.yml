@@ -4,7 +4,7 @@
 # 需要改服务器地址等配置时，在 profile 的 cordis.patch.yml 追加：
 #   - id: dsh-storecloud
 #     config:
-#       serverUrl: https://你的服务器
+#       serverUrl: https://你的商店服务器   # 默认连接作者的服务器
 - insert:
     - id: dsh-storecloud
       name: dsh-storecloud
