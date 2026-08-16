@@ -70,6 +70,28 @@ cd ~/.dsh/profiles/web && pnpm add dsh-storecloud
 
 ---
 
+## 使用说明
+
+### 首次使用（三步）
+
+1. 按上面命令安装并**重启 DSH web 进程**；
+2. 打开商城：右下角 🧩 悬浮球，或设置页「🧩 插件商城」，或会话头部「🧩 插件商城」Tab；
+3. 等待插件库首次同步（本地缓存秒开，全量数据后台拉取，之后打开即用）。
+
+### 登录与登录 token
+
+- 商城「**我的**」页 → 点「⚡ 立即登录 GitHub」→ 新窗口完成授权 → **token 自动回传并保存到本地**（`dsh_store_token`），全程无需手动复制/粘贴；
+- 再次打开商城自动恢复登录态；**换电脑/换环境**：装好插件 → 登录一次 → 云端组合/订阅/安装记录自动拉回，无需额外查找记录；
+- **数据通道（浏览/搜索/安装）不登录也能用**；登录仅用于云端同步与社区功能（发布插件/组合、订阅、点赞）；
+- 如果登录按钮跳转后无反应：服务器端未配置 OAuth（需在服务端管理端配置中心填入 GitHub OAuth Client ID/Secret + JWT_SECRET，见服务器端 README「使用说明」）。
+
+### 自建服务器的搜索 token
+
+- 插件库的自动收录依赖服务端的 **GitHub 搜索 token**（classic PAT）：在 GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) 生成，填入**服务端管理端 → 配置中心 → 搜索 token**（或环境变量 `GITHUB_TOKENS`）；
+- 只有打了 **`dsh-plugin`** topic 的仓库才会被收录；未配置搜索 token 时服务端同步与登录休眠，浏览/下载计数不受影响。
+
+---
+
 ## 配置
 
 插件通过 profile 的 `cordis.patch.yml` 传配置（全部可选，默认即用）：
