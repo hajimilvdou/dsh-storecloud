@@ -847,11 +847,20 @@ export function httpBridge(opts: {
         body.push({ target: p.id, type: 'agent', version: p.version || '1' })
       }
     }
+    // 严格去重 (type,target)：服务端 user_installs 主键为 (user_id,target,type)，
+    // 重复行会导致 PG 批量 INSERT 整个失败——必须在客户端合并。
+    const seenKey = new Set<string>()
+    const uploadBody = body.filter((b) => {
+      const k = b.type + '\u0000' + b.target
+      if (seenKey.has(k)) return false
+      seenKey.add(k)
+      return true
+    })
     try {
       const res = await dataFetch(currentBase() + API.meInstalls, {
         method: 'PUT',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ installs: body }),
+        body: JSON.stringify({ installs: uploadBody }),
       })
       // 同 fetchCloud：只有 401/403 才算登录失效；暂时故障不清登录态
       if (res.status === 401 || res.status === 403) {
@@ -873,7 +882,7 @@ export function httpBridge(opts: {
       cloud = {
         plugins: [...new Set(Object.keys(effectiveInstalled()))],
         combos: Object.keys(subscriptions),
-        agents: body.filter((b) => b.type === 'agent').map((b) => b.target),
+        agents: [...new Set(uploadBody.filter((b) => b.type === 'agent').map((b) => b.target))],
       }
     }
     return cloud
