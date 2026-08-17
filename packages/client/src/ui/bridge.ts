@@ -1046,6 +1046,15 @@ export function httpBridge(opts: {
     startEvents()
   }
 
+  /** 组合配额已用数：组合列表中作者匹配当前登录账号的数量（含软删占位，与服务端配额口径一致）。 */
+  const comboQuotaUsed = (login: string): number => {
+    const l = String(login || '').trim().toLowerCase()
+    if (!l) return 0
+    return combos.filter(
+      (c) => (c.author || '').toLowerCase() === l || (c.author_github ?? '').toLowerCase() === l,
+    ).length
+  }
+
   const state = (): StoreState => {
     const rawToken = currentToken()
     const user =
@@ -1066,7 +1075,9 @@ export function httpBridge(opts: {
         login: user?.login ?? '',
         name: user?.name ?? null,
         registered_at: '',
-        combo_quota: user ? `? / ${comboLimit}` : '',
+        // 组合配额：已用 = 组合列表中作者匹配数（与组合页「我的组合」口径一致，
+        // 含软删 removed 的占位组合，与服务端 countUserCombos 配额口径对齐）；上限 = 服务端下发 combo_limit。
+        combo_quota: user ? `${comboQuotaUsed(user.login)} / ${comboLimit}` : '',
       },
       cloud,
       serverUrl: activeBase,
