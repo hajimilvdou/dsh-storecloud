@@ -281,9 +281,10 @@ export function StoreApp(props: {
   // 闭包引用时触发 TDZ（Cannot access before initialization）——自动登录会静默失败。
   // 因此骨架 return 放在组件函数最末尾（所有定义之后）。
   // 插件与 Agent 分页：Plugin 页展示 kind=plugin（含双形态），Agent 页展示 kind=preset。
+  // 更新判断以真实安装版本为准（host /version RPC，回落构建注入版本）
   const clientUpdate =
     data?.clientPlugin &&
-    isUpdateAvailable(CLIENT_PLUGIN_VERSION, data.clientPlugin.version) &&
+    isUpdateAvailable(data.clientVersion ?? CLIENT_PLUGIN_VERSION, data.clientPlugin.version) &&
     ignoredClientVersion !== data.clientPlugin.version
       ? data.clientPlugin
       : null
@@ -616,7 +617,7 @@ export function StoreApp(props: {
         onSetLoc={doSetLoc}
         serverUrl={serverUrl || props.serverUrl}
         heartbeatMin={data?.heartbeatMin ?? 30}
-        clientVersion={CLIENT_PLUGIN_VERSION}
+        clientVersion={data?.clientVersion ?? CLIENT_PLUGIN_VERSION}
         clientUpdate={clientUpdate}
         onClose={() => setAcct(false)}
         onLogout={doLogout}

@@ -7,7 +7,7 @@
  * 用法：npm install && npm run build
  */
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,6 +16,17 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
 
 console.log('[build] 统一仓库构建：', root)
+
+// 0) 版本号单点化：从根 package.json 注入客户端常量（发版只需 bump version，
+//    内置版本号自动一致——配合 host 半 /version RPC，全链路以真实安装版本为准）。
+const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+const versionFile = join(root, 'packages', 'client', 'src', 'generated-version.ts')
+const versionSource = `// 自动生成：npm run build 时从根 package.json 注入（版本号单点事实来源），勿手改。\n// 发版流程：bump package.json version → npm run build → 提交（含本文件与产物）。\nexport const DSH_STORE_VERSION = '${String(pkg.version)}'\n`
+const existingVersion = existsSync(versionFile) ? readFileSync(versionFile, 'utf8') : ''
+if (existingVersion !== versionSource) {
+  writeFileSync(versionFile, versionSource)
+  console.log(`[build] 版本注入: DSH_STORE_VERSION = ${pkg.version}`)
+}
 
 // 1) tsc 编译 shared + client（workspaces）
 execFileSync('npm', ['run', 'build', '--workspaces'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' })

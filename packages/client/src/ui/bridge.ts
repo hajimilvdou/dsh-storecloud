@@ -3,6 +3,7 @@ import { MOCK_SOURCES, MockDataSource } from '../data/mock.js'
 import { HttpDataSource, type FetchLike } from '../data/http.js'
 import { isUpdateAvailable } from '../core/versions.js'
 import { Ledger, type KeyValueStore } from '../store/ledger.js'
+import { DSH_STORE_VERSION } from '../generated-version.js'
 
 /**
  * 客户端 UI 与数据层之间的桥接接口（transport 无关）：
@@ -48,10 +49,18 @@ export interface StoreState {
   trendingSize: number
   /** 功能开关(管理端配置中心下发)：趋势榜/组合/公告。 */
   features: { trending: boolean; combos: boolean; announcements: boolean }
+  /**
+   * 客户端插件真实安装版本：优先来自 host 半 /version RPC（读已装包 package.json，git/npm/tgz
+   * 安装都准确）；RPC 不可用时回落构建注入的 DSH_STORE_VERSION。更新判断以它为准。
+   */
+  clientVersion: string
 }
 
-/** 客户端插件（商城面板）自身版本，与服务端推送的 client_plugin.version 比对。 */
-export const CLIENT_PLUGIN_VERSION = '0.1.0'
+/**
+ * 客户端插件（商城面板）自身版本（构建时从根 package.json 注入，版本号单点事实来源）。
+ * 运行时真实版本经 host 半 /version RPC 获取（见 StoreState.clientVersion）。
+ */
+export const CLIENT_PLUGIN_VERSION = DSH_STORE_VERSION
 
 export interface StoreBridge {
   bootstrap(): Promise<StoreState>
@@ -213,6 +222,7 @@ export function mockBridge(): StoreBridge {
     serverUrl: 'https://blog.1qwq1.top',
     acked: { ...acked },
     clientPlugin,
+    clientVersion: CLIENT_PLUGIN_VERSION,
     heartbeatMin,
     comboReviewEnabled,
     trendingSize,
@@ -1061,6 +1071,7 @@ export function httpBridge(opts: {
       serverUrl: activeBase,
       acked: { ...acked },
       clientPlugin,
+      clientVersion: clientVersionReal ?? CLIENT_PLUGIN_VERSION,
       heartbeatMin,
       comboReviewEnabled,
       trendingSize,
@@ -1111,6 +1122,21 @@ export function httpBridge(opts: {
     }
   }
 
+  /** 真实安装版本：host 半 /version RPC 读已装包 package.json（git/npm/tgz 安装都准确）。 */
+  let clientVersionReal: string | null = null
+  let versionFetched = false
+  const fetchClientVersion = async (): Promise<void> => {
+    if (versionFetched || !rpcBase) return
+    versionFetched = true
+    try {
+      const r = await rpcCall('/version', {})
+      const v = String((r as { version?: string }).version ?? '').trim()
+      if (v) clientVersionReal = v
+    } catch {
+      /* RPC 不可用：回落构建注入版本 */
+    }
+  }
+
   return {
     /**
      * 首次加载：先恢复缓存立即返回（界面秒开），同时后台启动全量/增量同步，
@@ -1121,6 +1147,8 @@ export function httpBridge(opts: {
       await restoreSources()
       await readCache()
       await restoreSubs()
+      // 真实安装版本（本地 RPC，快）：更新判断以实际安装的包版本为准
+      await fetchClientVersion()
       // 乐观登录恢复：本地存在可解码的 token 即先恢复登录态（iframe 重建/切页回来不闪烁、不掉线），
       // 后台 load 会向服务器校验；只有服务器明确 401/403 才真正登出并清 token。
       if (!authValid) {
