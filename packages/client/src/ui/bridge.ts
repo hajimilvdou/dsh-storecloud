@@ -51,7 +51,7 @@ export interface StoreState {
 }
 
 /** 客户端插件（商城面板）自身版本，与服务端推送的 client_plugin.version 比对。 */
-export const CLIENT_PLUGIN_VERSION = '0.2.0'
+export const CLIENT_PLUGIN_VERSION = '0.1.0'
 
 export interface StoreBridge {
   bootstrap(): Promise<StoreState>
@@ -1460,8 +1460,13 @@ export function httpBridge(opts: {
     },
     async updateClientPlugin(spec, version) {
       // 客户端插件自身更新：走 Host 本地安装器 /client RPC（生产环境执行真实 dsh plugin add）。
-      const r = await rpcCall('/client', { install: spec, version })
-      return { ok: true, message: r.message || `已开始在线更新：dsh plugin add ${spec}@${version}` }
+      try {
+        const r = await rpcCall('/client', { install: spec, version })
+        return { ok: true, message: r.message || `已开始在线更新：dsh plugin add ${spec}@${version}` }
+      } catch (e) {
+        // 安装器未连接/命令失败：明确报错，不让 UI 静默无反馈
+        return { ok: false, message: `更新失败：${e instanceof Error ? e.message : String(e)}` }
+      }
     },
     async deleteAccount(combos) {
       const t = currentToken()
