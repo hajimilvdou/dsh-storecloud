@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Combo, Plugin } from '@dsh-store/shared'
 import type { PluginSortKey } from '../core/index.js'
-import type { CloudList, ComboMemberInput } from './bridge.js'
+import { agentInstalledKey, type CloudList, type ComboMemberInput } from './bridge.js'
 import { BatchDeleteBar, ConfirmDelete, Desc, hasUpdate, installHint, Metrics, sourceBadge, srcLink, typeBadge } from './components.js'
 
 type Installed = Record<string, string>
@@ -152,20 +152,6 @@ export function SearchView(props: {
   )
 }
 
-/** Agent 安装状态（多键匹配）：市场条目的 id 可能与实际安装 key（包名/仓库短名/预设名）不一致，
- *  依次尝试 id / name / preset_name / 仓库短名，命中返回该安装 key；全部未命中返回 null（未安装）。
- *  保证「Agent 库里有、市场里也有」的条目一定能正确显示在 Agent 库。 */
-function agentInstalledKey(a: Plugin, installed: Installed): string | null {
-  const cands = [a.id, a.name, a.preset_name, a.repo ? a.repo.split('/').pop() ?? '' : '']
-  const seen = new Set<string>()
-  for (const k of cands) {
-    if (!k || seen.has(k)) continue
-    seen.add(k)
-    if (installed[k]) return k
-  }
-  return null
-}
-
 /** Agent 市场：只展示 kind=preset 的自定义 Agent（文件复制安装），与插件/组合分开。 */
 export function AgentView(props: {
   agents: Plugin[]
@@ -256,17 +242,24 @@ export function AgentView(props: {
   )
 }
 
-/** Agent 库：管理已安装的 Agent（更新 / 删除），设计对齐插件库与组合库。 */
+/** Agent 库：管理已安装的 Agent（更新 / 删除 / 云端同步），设计对齐插件库与组合库。 */
 export function AgentLibraryView(props: {
   agents: Plugin[]
   installed: Installed
+  cloud: CloudList
   installing: Record<string, boolean>
   onInstallPreset: (pkg: string, presetName?: string) => void
   onUninstall: (pkg: string) => void
   onGoMarket: () => void
+  onPushCloud: () => Promise<CloudList>
+  onRefreshCloud: () => Promise<CloudList>
+  onRestoreAgents: (ids: string[]) => void
 }) {
   const [q, setQ] = useState('')
   const [uninstallSelected, setUninstallSelected] = useState<Record<string, boolean>>({})
+  const [cloudOpen, setCloudOpen] = useState(false)
+  const [cloudMsg, setCloudMsg] = useState<string | null>(null)
+  const [agentSel, setAgentSel] = useState<Record<string, boolean>>({})
   const kw = q.trim().toLowerCase()
   // 安装 key 预计算：市场有对应条目且本地已装 → 一定能显示（多键匹配 id/name/preset_name/仓库短名）
   const keyOf = new Map(props.agents.map((a) => [a.id, agentInstalledKey(a, props.installed)]))
@@ -282,7 +275,57 @@ export function AgentLibraryView(props: {
   })
   return (
     <div>
-      <div className="dshs-sec">
+      {/* 云端 Agent 折叠卡片：与插件库云端同款交互 */}
+      <div className="dshs-cloudcard" style={{ marginTop: 10 }}>
+        <div className="dshs-cloudcard-h" onClick={() => setCloudOpen(!cloudOpen)}>
+          <span className="dshs-nm" style={{ fontWeight: 600 }}>☁️ 云端 Agent</span>
+          <span className="dshs-compat">{props.cloud.agents.length} 个已保存</span>
+          <span className="dshs-cloudcard-arrow">{cloudOpen ? '收起 ▴' : '展开 ▾'}</span>
+        </div>
+        {cloudOpen ? (
+          <div className="dshs-cloudcard-body">
+            <div className="dshs-subnote">云端保存的是你手动上传的 Agent 清单（不自动同步）。勾选后「恢复所选」；已安装的会自动跳过。</div>
+            <div className="dshs-actions" style={{ marginTop: 6 }}>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在上传本地到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>☁ 上传本地到云端</button>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>↻ 从云端刷新</button>
+              <button className="dshs-abtn pri" onClick={() => {
+                const ids = props.cloud.agents.filter((a) => agentSel[a])
+                props.onRestoreAgents(ids)
+                setCloudMsg(`已开始恢复 ${ids.length} 个云端 Agent`)
+              }}>恢复所选</button>
+              <button className="dshs-abtn" onClick={() => {
+                const ok = window.confirm('⚠️ 一键全部恢复会复制所有云端 Agent 的预设目录到 ~/.dsh/.agent-presets/。部分 Agent 结构特殊可能导致失败，建议优先用「恢复所选」。')
+                if (!ok) return
+                props.onRestoreAgents(props.cloud.agents)
+                setCloudMsg(`已开始恢复 ${props.cloud.agents.length} 个云端 Agent`)
+              }}>⚡ 全部恢复（带提醒）</button>
+            </div>
+            {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
+            <div className="dshs-cloud-scroll">
+              {props.cloud.agents.length ? (
+                props.cloud.agents.map((id) => {
+                  const a = props.agents.find((x) => x.id === id)
+                  const iv = a ? agentInstalledKey(a, props.installed) : null
+                  return (
+                    <div className="dshs-pick" key={id} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setAgentSel({ ...agentSel, [id]: !agentSel[id] }) }}>
+                      <input type="checkbox" checked={!!agentSel[id]} onChange={() => setAgentSel({ ...agentSel, [id]: !agentSel[id] })} />
+                      <span className="dshs-nm" style={{ fontWeight: 600 }}>🤖 {a?.name ?? id}</span>
+                      {a?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {a.author}</span> : null}
+                      {a?.repo_url ? (
+                        <a className="dshs-lk" href={a.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.repo_url}>🔗 仓库</a>
+                      ) : null}
+                      {iv ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="dshs-empty" style={{ padding: 10 }}>云端暂无 Agent（登录后点击「上传本地到云端」保存）</div>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <div className="dshs-sec" style={{ marginTop: 10 }}>
         🤖 Agent 库
         <span>{entries.length} 个已安装 · {updates.length} 个可更新</span>
       </div>
@@ -590,7 +633,11 @@ export function ComboView(props: {
               </div>
             </>
           ) : (
-            <div className="dshs-empty" style={{ padding: 14 }}>还没有自己的组合，点上方按钮创建第一个组合</div>
+            <div className="dshs-empty" style={{ padding: 14 }}>
+              {"还没有自己的组合，点上方按钮创建第一个组合"}
+              <br />
+              <span style={{ fontSize: 11, opacity: 0.8 }}>若已发布却看不到：请确认当前连接的服务器与发布时一致，并在「☁️ 云端」点「从云端刷新」（组合数据按服务器下发，状态为「待审核/已发布」都会显示在你这里）</span>
+            </div>
           )
         ) : (
           <div className="dshs-empty" style={{ padding: 14 }}>登录 GitHub 后，这里会优先显示你创建的组合</div>
@@ -840,7 +887,9 @@ export function SubscribeView(props: {
   const [subOpen, setSubOpen] = useState<Record<string, boolean>>({})
   const [subSelected, setSubSelected] = useState<Record<string, boolean>>({})
   const [csearch, setCsearch] = useState('')
-  const [cloudDeselected, setCloudDeselected] = useState<Record<string, boolean>>({})
+  // 云端组合选择：组（订阅）与组内插件（安装）分开勾选，跨组同名插件按 pkg 天然去重
+  const [comboGroupsSel, setComboGroupsSel] = useState<Record<string, boolean>>({})
+  const [comboPlugsSel, setComboPlugsSel] = useState<Record<string, boolean>>({})
   const [cloudMsg, setCloudMsg] = useState<string | null>(null)
   const kw = q.trim().toLowerCase()
   const groups = props.combos.filter((c) => props.subscriptions[c.name])
@@ -852,73 +901,94 @@ export function SubscribeView(props: {
   const selectedGroups = filtered.filter((c) => subSelected[c.name]).map((c) => c.name)
   const cq = csearch.trim().toLowerCase()
   const cloudCombos = props.cloud.combos.filter((c) => !cq || c.toLowerCase().includes(cq))
-  const toggleCloud = (key: string) => {
-    const next = { ...cloudDeselected }
-    if (next[key]) delete next[key]
-    else next[key] = true
-    setCloudDeselected(next)
-  }
+  // 恢复所选：订阅选中的组 + 安装单独勾选的插件（跨组去重；已装自动跳过）
   const restoreSelectedCloud = () => {
-    const cs = props.cloud.combos.filter((c) => !cloudDeselected['c:' + c])
-    props.onRestoreSubs(cs)
-    setCloudMsg(`已开始恢复 ${cs.length} 个云端组合`)
+    const gs = Object.keys(comboGroupsSel).filter((n) => comboGroupsSel[n])
+    const ps = Object.keys(comboPlugsSel).filter((p) => comboPlugsSel[p])
+    if (gs.length) props.onRestoreSubs(gs)
+    for (const p of ps) if (!props.installed[p]) props.onInstallPlugin(p)
+    setCloudMsg(`已开始恢复：${gs.length} 个组订阅 + ${ps.length} 个插件`)
+  }
+  // 全部恢复：订阅全部云端组合并安装组内成员（bridge 层对已装成员自动去重）
+  const restoreAllCloud = () => {
+    const ok = window.confirm(
+      '⚠️ 一键全部恢复将订阅云端全部组合，并安装所有组内插件（跨组重复插件会自动跳过）。\n\n' +
+        '建议优先用「恢复所选」按需勾选组/插件。',
+    )
+    if (!ok) return
+    props.onRestoreSubs(props.cloud.combos)
+    setCloudMsg(`已开始恢复 ${props.cloud.combos.length} 个云端组合`)
   }
 
   return (
     <div>
-      <div className="dshs-sec">
-        ☁️ 云端组合
-        <button className="dshs-abtn" onClick={() => setCloudOpen(!cloudOpen)}>
-          {cloudOpen ? '收起 ▴' : `展开（${props.cloud.combos.length}）▾`}
-        </button>
-      </div>
-      {cloudOpen ? (
-        <div className="dshs-cloudbox">
-          <div className="dshs-subnote">云端保存的组合：勾选恢复会同时恢复订阅和组内插件；数据过多时在下方框内滚动查找。</div>
-          <div className="dshs-actions" style={{ marginTop: 6 }}>
-            <button
-              className="dshs-abtn"
-              onClick={() => {
-                setCloudMsg('正在上传本地组合到云端…')
-                void props.onPushCloud().then((c) => setCloudMsg(`已上传：${c.combos.length} 个组合`))
-              }}
-            >
-              ☁ 上传本地到云端
-            </button>
-            <button
-              className="dshs-abtn"
-              onClick={() => {
-                setCloudMsg('正在从云端刷新…')
-                void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：${c.combos.length} 个组合`))
-              }}
-            >
-              ↻ 从云端刷新
-            </button>
-            {props.installing['restore'] ? (
-              <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
-            ) : (
-              <button className="dshs-abtn pri" onClick={restoreSelectedCloud}>恢复所选</button>
-            )}
-            {props.installing['restore'] ? (
-              <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
-            ) : (
-              <button className="dshs-abtn" onClick={() => props.onRestoreSubs(props.cloud.combos)}>⚡ 全部恢复</button>
-            )}
-          </div>
-          {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
-          <div className="dshs-frow" style={{ marginTop: 8 }}>
-            <input className="dshs-input" placeholder="搜索云端组合…" value={csearch} onChange={(e) => setCsearch(e.target.value)} />
-          </div>
-          <div className="dshs-cloud-scroll">
-            {cloudCombos.length ? cloudCombos.map((c) => (
-              <div className="dshs-pick" key={c} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') toggleCloud('c:' + c) }}>
-                <input type="checkbox" checked={!cloudDeselected['c:' + c]} onChange={() => toggleCloud('c:' + c)} />
-                <span className="dshs-nm" style={{ fontWeight: 600 }}>🗂 {c}（组）</span>
-              </div>
-            )) : <div className="dshs-empty" style={{ padding: 10 }}>{cq ? '云端组合中没有匹配项' : '云端暂无组合'}</div>}
-          </div>
+      {/* 云端组合：折叠卡片；组嵌套插件，支持跨组勾选 */}
+      <div className="dshs-cloudcard" style={{ marginTop: 10 }}>
+        <div className="dshs-cloudcard-h" onClick={() => setCloudOpen(!cloudOpen)}>
+          <span className="dshs-nm" style={{ fontWeight: 600 }}>☁️ 云端组合</span>
+          <span className="dshs-compat">{props.cloud.combos.length} 个已保存</span>
+          <span className="dshs-cloudcard-arrow">{cloudOpen ? '收起 ▴' : '展开 ▾'}</span>
         </div>
-      ) : null}
+        {cloudOpen ? (
+          <div className="dshs-cloudcard-body">
+            <div className="dshs-subnote">云端组合按<b>组</b>展示：勾选组 = 订阅该组；展开后可单独勾选组内<b>插件</b>跨组安装；重复插件自动跳过。</div>
+            <div className="dshs-actions" style={{ marginTop: 6 }}>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在上传本地组合到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>☁ 上传本地到云端</button>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>↻ 从云端刷新</button>
+              {props.installing['restore'] ? (
+                <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
+              ) : (
+                <button className="dshs-abtn pri" onClick={restoreSelectedCloud}>恢复所选</button>
+              )}
+              {props.installing['restore'] ? (
+                <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
+              ) : (
+                <button className="dshs-abtn" onClick={restoreAllCloud}>⚡ 全部恢复（带提醒）</button>
+              )}
+            </div>
+            {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
+            <div className="dshs-frow" style={{ marginTop: 8 }}>
+              <input className="dshs-input" placeholder="搜索云端组合…" value={csearch} onChange={(e) => setCsearch(e.target.value)} />
+            </div>
+            <div className="dshs-cloud-scroll">
+              {cloudCombos.length ? cloudCombos.map((name) => {
+                const c = props.combos.find((x) => x.name === name)
+                const members = c?.members ?? []
+                const sub = !!props.subscriptions[name]
+                return (
+                  <div className="dshs-pick-sub" key={name}>
+                    <div className="dshs-pick" onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setComboGroupsSel({ ...comboGroupsSel, [name]: !comboGroupsSel[name] }) }}>
+                      <input type="checkbox" checked={!!comboGroupsSel[name]} onChange={() => setComboGroupsSel({ ...comboGroupsSel, [name]: !comboGroupsSel[name] })} />
+                      <span className="dshs-nm" style={{ fontWeight: 600 }}>🗂 {name}</span>
+                      <span className="dshs-compat" style={{ marginLeft: 0 }}>{members.length} 个插件</span>
+                      {sub ? <span className="dshs-pill primary">已订阅</span> : <span className="dshs-pill off">未订阅</span>}
+                    </div>
+                    {members.length ? (
+                      <div className="dshs-pick-sub-in">
+                        {members.map((m) => {
+                          const p = props.plugins.find((x) => x.id === m.pkg)
+                          return (
+                            <div className="dshs-pick" key={m.pkg} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setComboPlugsSel({ ...comboPlugsSel, [m.pkg]: !comboPlugsSel[m.pkg] }) }}>
+                              <input type="checkbox" checked={!!comboPlugsSel[m.pkg]} onChange={() => setComboPlugsSel({ ...comboPlugsSel, [m.pkg]: !comboPlugsSel[m.pkg] })} />
+                              <span className="dshs-nm" style={{ fontWeight: 600 }}>🧩 {p?.name ?? m.pkg}</span>
+                              <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '手动安装：需自行打开插件页面安装' : '一键安装'}>{m.install_mode === 'manual' ? '✋ 手动' : '⚡ 自动'}</span>
+                              {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
+                              {p?.repo_url ? (
+                                <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
+                              ) : null}
+                              {props.installed[m.pkg] ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              }) : <div className="dshs-empty" style={{ padding: 10 }}>{cq ? '云端组合中没有匹配项' : '云端暂无组合'}</div>}
+            </div>
+          </div>
+        ) : null}
+      </div>
       <div className="dshs-sec" style={{ marginTop: cloudOpen ? 14 : 4 }}>
         🗂 我的组合库
         <span>{groups.length} 个组合</span>
@@ -1049,74 +1119,99 @@ export function MyView(props: {
     else next[key] = true
     setDeselected(next)
   }
-  const row = (key: string, label: string, icon: string) => (
-    <div
-      className="dshs-pick"
-      key={key}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).tagName !== 'INPUT') toggle(key)
-      }}
-    >
-      <input type="checkbox" checked={!deselected[key]} onChange={() => toggle(key)} />
-      <span className="dshs-nm" style={{ fontWeight: 600 }}>{icon} {label}</span>
-    </div>
-  )
+  // 云端插件条目：可勾选恢复；附带作者与仓库地址（手动安装指引）
+  const cloudRow = (pkg: string) => {
+    const p = props.plugins.find((x) => x.id === pkg)
+    return (
+      <div
+        className="dshs-pick"
+        key={pkg}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') toggle('p:' + pkg)
+        }}
+      >
+        <input type="checkbox" checked={!deselected['p:' + pkg]} onChange={() => toggle('p:' + pkg)} />
+        <span className="dshs-nm" style={{ fontWeight: 600 }}>🧩 {p?.name ?? pkg}</span>
+        {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
+        {p?.repo_url ? (
+          <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
+        ) : null}
+        {props.installed[pkg] ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+      </div>
+    )
+  }
   const doRestorePlugins = () => {
     const ps = props.cloud.plugins.filter((p) => !deselected['p:' + p])
     props.onRestorePlugins(ps)
     setCloudMsg(`已开始恢复 ${ps.length} 个云端插件`)
   }
+  // 全部恢复：弹窗提醒安装方式风险（推荐选择安装；不适用自动安装的手动去官网）
+  const restoreAllPlugins = () => {
+    const ok = window.confirm(
+      '⚠️ 一键全部恢复将依次对每个云端插件执行官方安装命令（dsh plugin add）。\n\n' +
+        '部分插件安装方式多样（手动安装包 / 特殊 Agent 预设等），官方命令可能不适配、恢复会失败。\n\n' +
+        '更稳妥：优先使用「恢复所选」勾选你确认能自动安装的插件；' +
+        '不适配自动安装的，请按条目上的 👤 作者与 🔗 仓库地址手动到官网安装。',
+    )
+    if (!ok) return
+    props.onRestorePlugins(props.cloud.plugins)
+    setCloudMsg(`已开始恢复 ${props.cloud.plugins.length} 个云端插件`)
+  }
 
   return (
     <div>
-      <div className="dshs-sec">
-        ☁️ 云端插件
-        <button className="dshs-abtn" onClick={() => setCloudOpen(!cloudOpen)}>
-          {cloudOpen ? '收起 ▴' : `展开（${props.cloud.plugins.length}）▾`}
-        </button>
-      </div>
-      {cloudOpen ? (
-        <div className="dshs-cloudbox">
-          <div className="dshs-subnote">云端已保存的插件：勾选后恢复；插件较多时在下方框内滚动查找。</div>
-          <div className="dshs-actions" style={{ marginTop: 6 }}>
-            <button
-              className="dshs-abtn"
-              onClick={() => {
-                setCloudMsg('正在上传本地插件到云端…')
-                void props.onPushCloud().then((c) => setCloudMsg(`已上传：${c.plugins.length} 个插件`))
-              }}
-            >
-              ☁ 上传本地到云端
-            </button>
-            <button
-              className="dshs-abtn"
-              onClick={() => {
-                setCloudMsg('正在从云端刷新…')
-                void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：${c.plugins.length} 个插件`))
-              }}
-            >
-              ↻ 从云端刷新
-            </button>
-            {props.installing['restore'] ? (
-              <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
-            ) : (
-              <button className="dshs-abtn pri" onClick={doRestorePlugins}>恢复所选</button>
-            )}
-            {props.installing['restore'] ? (
-              <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
-            ) : (
-              <button className="dshs-abtn" onClick={() => props.onRestorePlugins(props.cloud.plugins)}>⚡ 全部恢复</button>
-            )}
-          </div>
-          {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
-          <div className="dshs-frow" style={{ marginTop: 8 }}>
-            <input className="dshs-input" placeholder="搜索云端插件…" value={psearch} onChange={(e) => setPsearch(e.target.value)} />
-          </div>
-          <div className="dshs-cloud-scroll">
-            {cloudPlugins.length ? cloudPlugins.map((p) => row('p:' + p, p, '🧩')) : <div className="dshs-empty" style={{ padding: 10 }}>{pq ? '云端插件中没有匹配项' : '云端暂无插件'}</div>}
-          </div>
+      {/* 云端插件：折叠卡片（点击展开变大），风格与更新提醒栏一致 */}
+      <div className="dshs-cloudcard" style={{ marginTop: 10 }}>
+        <div className="dshs-cloudcard-h" onClick={() => setCloudOpen(!cloudOpen)}>
+          <span className="dshs-nm" style={{ fontWeight: 600 }}>☁️ 云端插件</span>
+          <span className="dshs-compat">{props.cloud.plugins.length} 个已保存</span>
+          <span className="dshs-cloudcard-arrow">{cloudOpen ? '收起 ▴' : '展开 ▾'}</span>
         </div>
-      ) : null}
+        {cloudOpen ? (
+          <div className="dshs-cloudcard-body">
+            <div className="dshs-subnote">
+              🛡 隐私说明：云端只保存<b>你手动上传</b>的插件/组合/Agent 清单，不上传任何代码或数据；本地安装不会自动同步，需点「上传」。
+            </div>
+            <div className="dshs-actions" style={{ marginTop: 6 }}>
+              <button
+                className="dshs-abtn"
+                onClick={() => {
+                  setCloudMsg('正在上传本地到云端…')
+                  void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`))
+                }}
+              >
+                ☁ 上传本地到云端
+              </button>
+              <button
+                className="dshs-abtn"
+                onClick={() => {
+                  setCloudMsg('正在从云端刷新…')
+                  void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`))
+                }}
+              >
+                ↻ 从云端刷新
+              </button>
+              {props.installing['restore'] ? (
+                <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
+              ) : (
+                <button className="dshs-abtn pri" onClick={doRestorePlugins}>恢复所选</button>
+              )}
+              {props.installing['restore'] ? (
+                <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
+              ) : (
+                <button className="dshs-abtn" onClick={restoreAllPlugins}>⚡ 全部恢复（带提醒）</button>
+              )}
+            </div>
+            {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
+            <div className="dshs-frow" style={{ marginTop: 8 }}>
+              <input className="dshs-input" placeholder="搜索云端插件…" value={psearch} onChange={(e) => setPsearch(e.target.value)} />
+            </div>
+            <div className="dshs-cloud-scroll">
+              {cloudPlugins.length ? cloudPlugins.map((p) => cloudRow(p)) : <div className="dshs-empty" style={{ padding: 10 }}>{pq ? '云端插件中没有匹配项' : '云端暂无插件'}</div>}
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       <div className="dshs-mem" style={{ marginTop: 10, borderColor: unacked.length ? 'rgba(59,158,255,.5)' : undefined }}>
         <span className="dshs-nm" style={{ fontWeight: 600 }}>🔵 更新提醒</span>

@@ -98,6 +98,17 @@ export const STORE_CSS = `
 .dshs-loc-toggle.on{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;border-color:transparent}
 .dshs-loc-toggle:hover{border-color:var(--brand2);color:var(--brand2)}
 .dshs-loc-toggle.on:hover{color:#fff}
+/* 云端折叠卡片（插件/组合/Agent 共用）：标题行可点击展开，展开后内容区域变大 */
+.dshs-cloudcard{background:var(--bg3);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.dshs-cloudcard-h{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;user-select:none}
+.dshs-cloudcard-h:hover{background:var(--hover)}
+.dshs-cloudcard-arrow{margin-left:auto;font-size:11px;color:var(--tx2);white-space:nowrap}
+.dshs-cloudcard-body{padding:10px 12px 12px;border-top:1px solid var(--line)}
+/* 云端组合：组 + 嵌套成员插件 */
+.dshs-pick-sub{border:1px solid var(--line);border-radius:9px;margin-bottom:6px;overflow:hidden}
+.dshs-pick-sub > .dshs-pick{border:none;border-radius:0;margin-bottom:0;background:var(--bg2)}
+.dshs-pick-sub-in{padding:2px 6px 6px 22px;background:var(--bg3)}
+.dshs-pick-sub-in .dshs-pick{background:var(--bg3);border-color:var(--line);margin-bottom:4px}
 /* 入口标题自定义输入 */
 .dshs-loc-title{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:3px 8px;color:var(--tx);font-size:12px;outline:none}
 .dshs-loc-title:focus{border-color:var(--brand2)}

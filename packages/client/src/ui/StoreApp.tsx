@@ -97,7 +97,7 @@ export function StoreApp(props: {
   const [sources, setSources] = useState<ServerSource[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [account, setAccount] = useState<AccountInfo | null>(null)
-  const [cloud, setCloud] = useState<CloudList>({ plugins: [], combos: [] })
+  const [cloud, setCloud] = useState<CloudList>({ plugins: [], combos: [], agents: [] })
   const [acked, setAcked] = useState<Record<string, string>>({})
   const [authUser, setAuthUser] = useState<{ login: string; name: string | null } | null>(null)
   const [pos, setPos] = useState<Pos>({ x: 26, y: 26 })
@@ -466,6 +466,11 @@ export function StoreApp(props: {
       setSubscriptions(r.subscriptions)
       if (loggedIn) refreshCloud()
     }).catch(function (e) { window.alert(String((e && e.message) || e)) })
+  const doRestoreAgents = (ids: string[]) =>
+    void runInstalling('restore', () => props.bridge.restoreAgents(ids)).then((r) => {
+      setInstalled(r.installed)
+      if (loggedIn) refreshCloud()
+    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
   const doAckAll = () => void props.bridge.ackAll().then(setAcked)
   const doAddSource = (url: string, password: string) => props.bridge.addSource(url, password).then(setSources)
   const doRemoveSource = (id: string) => void props.bridge.removeSource(id).then(setSources)
@@ -504,7 +509,7 @@ export function StoreApp(props: {
     if (props.tokenStore) props.tokenStore.current = null
     setLoggedIn(false)
     setAuthUser(null)
-    setCloud({ plugins: [], combos: [] })
+    setCloud({ plugins: [], combos: [], agents: [] })
     void props.bridge.bootstrap().then(applyState)
   }
   const doPushCloud = async () => {
@@ -575,10 +580,14 @@ export function StoreApp(props: {
       <AgentLibraryView
         agents={agents}
         installed={installed}
+        cloud={cloud}
         installing={installing}
         onInstallPreset={doInstallPreset}
         onUninstall={doUninstall}
         onGoMarket={() => setTab('agent')}
+        onPushCloud={doPushCloud}
+        onRefreshCloud={doRefreshCloud}
+        onRestoreAgents={doRestoreAgents}
       />
     )
 

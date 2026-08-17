@@ -20,6 +20,8 @@ export interface AccountInfo {
 export interface CloudList {
   plugins: string[]
   combos: string[]
+  /** 云端已保存的 Agent（kind=preset 的市场条目 id）。 */
+  agents: string[]
 }
 
 export interface StoreState {
@@ -103,6 +105,8 @@ export interface StoreBridge {
   reportMissing(pkg: string, repoUrl: string | null, version: string): Promise<{ ok: boolean; message: string }>
   restorePlugins(plugins: string[]): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
   restoreSubscriptions(combos: string[]): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
+  /** 从云端恢复已装 Agent（按市场条目 id，多键匹配去重；rpc /preset 安装）。 */
+  restoreAgents(agents: string[]): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
   ackUpdate(pkg: string): Promise<Record<string, string>>
   ackAll(): Promise<Record<string, string>>
   /** 客户端插件自身在线更新：复用插件更新机制 = dsh plugin add <spec>@<version>。 */
@@ -122,6 +126,20 @@ export interface ManualInstallItem {
 
 /** 组合成员输入：包名字符串(全 auto)或 {pkg, install_mode} 对象。 */
 export type ComboMemberInput = string | { pkg: string; install_mode?: 'auto' | 'manual' }
+
+/** Agent 安装状态（多键匹配）：市场条目的 id 可能与实际安装 key（包名/仓库短名/预设名）不一致，
+ *  依次尝试 id / name / preset_name / 仓库短名，命中返回该安装 key；全部未命中返回 null（未安装）。
+ *  保证「本地装了、市场里有」的条目一定能正确识别（Agent 库显示 / 云端上传去重 / 恢复跳过）。 */
+export function agentInstalledKey(a: Plugin, installed: Record<string, string>): string | null {
+  const cands = [a.id, a.name, a.preset_name, a.repo ? a.repo.split('/').pop() ?? '' : '']
+  const seen = new Set<string>()
+  for (const k of cands) {
+    if (!k || seen.has(k)) continue
+    seen.add(k)
+    if (installed[k]) return k
+  }
+  return null
+}
 
 /** 内存 KV 存储（mock 用）。 */
 function memoryStore(): KeyValueStore {
@@ -157,7 +175,7 @@ export function mockBridge(): StoreBridge {
   const subscriptions: Record<string, boolean> = { 新手启航包: true }
   let sources: ServerSource[] = [...MOCK_SOURCES]
   const account: AccountInfo = { login: 'liwei', name: '李伟', registered_at: '2026-08-13', combo_quota: '2/3' }
-  let cloud: CloudList = { plugins: ['dsh-memory', 'dsh-checkpoint', 'dsh-session-search', 'dsh-web-ui', 'dsh-skins', 'dsh-pet'], combos: ['新手启航包', '前端摸鱼套装'] }
+  let cloud: CloudList = { plugins: ['dsh-memory', 'dsh-checkpoint', 'dsh-session-search', 'dsh-web-ui', 'dsh-skins', 'dsh-pet'], combos: ['新手启航包', '前端摸鱼套装'], agents: [] }
   const acked: Record<string, string> = {}
   const likedSet = new Set<string>()
   let clientPlugin: { version: string; install: string } | null = null
@@ -252,6 +270,7 @@ export function mockBridge(): StoreBridge {
       cloud = {
         plugins: [...new Set(ledger.listInstalls().map((r) => r.pkg))],
         combos: Object.keys(subscriptions),
+        agents: [],
       }
       return cloud
     },
@@ -378,6 +397,10 @@ export function mockBridge(): StoreBridge {
     },
     async restorePlugins(ps) {
       for (const p of ps) await ledger.addInstall(installRecord(p, latestVersion(plugins, p)))
+      return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
+    },
+    async restoreAgents(ids) {
+      for (const id of ids) await ledger.addInstall(installRecord(id, latestVersion(plugins, id)))
       return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
     },
     async restoreSubscriptions(cs) {
@@ -609,7 +632,7 @@ export function httpBridge(opts: {
   let combosFetchedAt = 0
   const COMBO_FRESH_MS = 60000
   const acked: Record<string, string> = {}
-  let cloud: CloudList = { plugins: [], combos: [] }
+  let cloud: CloudList = { plugins: [], combos: [], agents: [] }
   /** 我已点赞的目标集合（登录后从 GET /api/v1/me/likes 初始化，点赞/取消即时增删）。 */
   const likedTargets = new Set<string>()
   /**
@@ -730,7 +753,7 @@ export function httpBridge(opts: {
     const t = currentToken()
     if (!t) {
       authValid = false
-      cloud = { plugins: [], combos: [] }
+      cloud = { plugins: [], combos: [], agents: [] }
       return
     }
     try {
@@ -744,10 +767,11 @@ export function httpBridge(opts: {
       }
       authValid = true
       if (!res.ok) return
-      const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo'; version: string }>
+      const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }>
       cloud = {
         plugins: [...new Set(list.filter((i) => i.type === 'plugin').map((i) => i.target))],
         combos: [...new Set(list.filter((i) => i.type === 'combo').map((i) => i.target))],
+        agents: [...new Set(list.filter((i) => i.type === 'agent').map((i) => i.target))],
       }
       // 云端订阅合并进本地订阅（多端一致）：其他设备订阅的组合本机也标记已订阅
       for (const i of list) if (i.type === 'combo' && i.target) subscriptions[i.target] = true
@@ -800,19 +824,29 @@ export function httpBridge(opts: {
     return { count: body.likes, liked: !!body.liked }
   }
 
-  /** 上传本地安装 + 订阅组到云端，并让内存中的 cloud 与上传结果保持一致。 */
+  /** 上传本地安装 + 订阅组 + 已装 Agent 到云端，并让内存中的 cloud 与上传结果保持一致。 */
   async function syncCloud(): Promise<CloudList> {
     const t = currentToken()
     if (!t) {
-      cloud = { plugins: [], combos: [] }
+      cloud = { plugins: [], combos: [], agents: [] }
       return cloud
     }
-    const body: Array<{ target: string; type: 'plugin' | 'combo'; version: string }> = Object.entries(toInstalledMap(ledger)).map(([target, version]) => ({
+    // 上传"有效已装"（本地台账 + 真实已装合并）：CLI/其他方式安装的插件也会一并上传，
+    // 不再出现"本地装了插件、上传却显示 0 个"的问题。
+    const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = Object.entries(effectiveInstalled()).map(([target, version]) => ({
       target,
       type: 'plugin',
       version,
     }))
     for (const c of Object.keys(subscriptions)) body.push({ target: c, type: 'combo', version: '1' })
+    // Agent：已装（多键匹配）的 preset 条目按市场 id 上传，恢复时以 id 定位
+    const installedKeys = Object.keys(effectiveInstalled())
+    for (const p of plugins) {
+      if (p.kind !== 'preset') continue
+      if (installedKeys.includes(p.id) || installedKeys.includes(p.name) || installedKeys.includes(p.preset_name ?? '') || installedKeys.includes(p.repo.split('/').pop() ?? '')) {
+        body.push({ target: p.id, type: 'agent', version: p.version || '1' })
+      }
+    }
     try {
       const res = await dataFetch(currentBase() + API.meInstalls, {
         method: 'PUT',
@@ -827,17 +861,19 @@ export function httpBridge(opts: {
       }
       authValid = true
       if (res.ok) {
-        const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo'; version: string }>
+        const list = (await res.json()) as Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }>
         cloud = {
           plugins: [...new Set(list.filter((i) => i.type === 'plugin').map((i) => i.target))],
           combos: [...new Set(list.filter((i) => i.type === 'combo').map((i) => i.target))],
+          agents: [...new Set(list.filter((i) => i.type === 'agent').map((i) => i.target))],
         }
       }
     } catch {
       /* 离线时至少让本地 UI 与本地台账一致 */
       cloud = {
-        plugins: [...new Set(Object.keys(toInstalledMap(ledger)))],
+        plugins: [...new Set(Object.keys(effectiveInstalled()))],
         combos: Object.keys(subscriptions),
+        agents: body.filter((b) => b.type === 'agent').map((b) => b.target),
       }
     }
     return cloud
@@ -1560,6 +1596,34 @@ export function httpBridge(opts: {
       await syncCloud()
       if (failures.length > 0) {
         throw new Error(`部分插件恢复失败（${failures.length}/${ps.length}）\n${failures.slice(0, 3).join('\n')}`)
+      }
+      return { installed: effectiveInstalled(), subscriptions: { ...subscriptions } }
+    },
+    async restoreAgents(ids) {
+      const failures: string[] = []
+      const current = effectiveInstalled()
+      for (const id of ids) {
+        const p = plugins.find((x) => x.id === id)
+        if (!p) continue
+        // 防重复安装：多键匹配已装（id/name/preset_name/仓库短名任一命中）即跳过
+        const already = agentInstalledKey(p, current) !== null
+        if (already) continue
+        try {
+          await rpcCall('/preset', {
+            pkg: id,
+            presetName: p.preset_name ?? p.name ?? id,
+            repoUrl: p.repo_url ?? '',
+          })
+          await ledger.addInstall(installRecord(id, p.version ?? '1.0.0'))
+          realInstalled.set(id, p.version ?? '1.0.0')
+          void source.reportInstall(id)
+        } catch (e) {
+          failures.push(`${id}：${String((e as Error)?.message ?? e)}`)
+        }
+      }
+      await syncCloud()
+      if (failures.length > 0) {
+        throw new Error(`部分 Agent 恢复失败（${failures.length}/${ids.length}）\n${failures.slice(0, 3).join('\n')}`)
       }
       return { installed: effectiveInstalled(), subscriptions: { ...subscriptions } }
     },
