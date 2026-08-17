@@ -704,7 +704,8 @@ export function httpBridge(opts: {
         is_lb: false,
         last_seen_at: null,
         role: isActive ? 'primary' : 'backup',
-        status: h ? (h.reachable ? 'connected' : 'unreachable') : isActive ? 'unreachable' : 'disconnected',
+        // 未探测时：主源显示「连接中」（面板正在尝试连接），备用源显示「未连接」
+        status: h ? (h.reachable ? 'connected' : 'unreachable') : isActive ? 'connecting' : 'disconnected',
       })
     }
     for (const s of [...nodeSources, ...customSources]) {
@@ -1101,6 +1102,13 @@ export function httpBridge(opts: {
     eventSourceStarted = true
     try {
       const es = new EventSource(currentBase() + API.events)
+      // 断线重连成功（挂机/网络恢复）→ 立即刷新数据与源状态：
+      // EventSource 重连只恢复通道，不会重发事件；不刷新的话「我的」页会一直显示断联。
+      let sseOpenedOnce = false
+      es.onopen = () => {
+        if (sseOpenedOnce) void doRefresh()
+        sseOpenedOnce = true
+      }
       es.addEventListener('likes', (e) => {
         try {
           const d = JSON.parse(String((e as MessageEvent).data)) as { target?: string; likes?: number }
@@ -1360,6 +1368,11 @@ export function httpBridge(opts: {
     async pingSource(id) {
       const target = mergeSources().find((s) => s.id === id)
       if (!target) return sources
+      // 测速开始：先置「连接中」（乐观状态，UI 即时反馈），探测完成后更新
+      customSources = customSources.map((s) => (s.id === id ? { ...s, status: 'connecting' as const } : s))
+      nodeSources = nodeSources.map((s) => (s.id === id ? { ...s, status: 'connecting' as const } : s))
+      sources = mergeSources()
+      notify()
       const probe = await probeUrl(target.url)
       if (target.builtin) {
         baseHealth.set(normUrl(target.url), { reachable: probe.status === 'connected', latency: probe.latency })

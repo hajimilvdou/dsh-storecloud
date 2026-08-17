@@ -85,7 +85,8 @@ export function StoreApp(props: {
   const [drawer, setDrawer] = useState(false)
   const [acct, setAcct] = useState(false)
   const [publish, setPublish] = useState(false)
-  const [read, setRead] = useState(false)
+  // 默认无未读（iframe 重建/切回面板不误亮红点；仅「新公告到达」时点亮）
+  const [read, setRead] = useState(true)
   const [loggedIn, setLoggedIn] = useState(false)
   const [zoomed, setZoomed] = useState<Announcement | null>(null)
   const [geo, setGeo] = useState<Geo>(initialGeo)
@@ -155,11 +156,23 @@ export function StoreApp(props: {
 
   // 新公告实时到达（含管理端对组合操作后推送的私人公告）→ 点亮未读红点。
   // 只比较 id 集合：SSE/心跳触发的普通刷新（无新公告）不误报未读。
+  // 已见集合持久化（localStorage）：iframe 重建/切回面板后恢复，已看过的公告不再重复亮红点。
+  const SEEN_ANNOS_KEY = 'dsh_store_annos_seen_v1'
   const seenAnnoIds = useRef<Set<string> | null>(null)
   useEffect(() => {
     const ids = new Set(announcements.map((a) => a.id))
     if (seenAnnoIds.current === null) {
-      seenAnnoIds.current = ids
+      // 首次（iframe 重建）：恢复持久化已见集合；无记录时以当前集合为基准（不误亮）
+      try {
+        const raw = localStorage.getItem(SEEN_ANNOS_KEY)
+        if (raw) {
+          const list = JSON.parse(raw) as string[]
+          seenAnnoIds.current = new Set(list.filter((x) => typeof x === 'string'))
+        }
+      } catch {
+        /* 数据损坏忽略 */
+      }
+      if (seenAnnoIds.current === null) seenAnnoIds.current = ids
       return
     }
     const fresh = [...ids].some((id) => !(seenAnnoIds.current as Set<string>).has(id))
@@ -214,6 +227,17 @@ export function StoreApp(props: {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  // 挂机/切后台回来（visibilitychange）：浏览器节流了后台定时器，心跳可能停摆——
+  // 回到前台立即强制刷新（探测源状态 + 增量数据），「我的」页不再停留断联显示。
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) return
+      void props.bridge.refresh().then(applyState)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [props.bridge])
 
   // 面板拖动/缩放统一挂 window：指针移出面板或松开位置不准确也不会中断。
   useEffect(() => {
@@ -564,7 +588,16 @@ export function StoreApp(props: {
       onQuery={setQuery}
       theme={theme}
       onTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      onDrawer={() => { setDrawer(true); setRead(true) }}
+      onDrawer={() => {
+        setDrawer(true)
+        setRead(true)
+        // 已读持久化：本次看到的公告集合写入 localStorage（下次重建不再误亮红点）
+        try {
+          const ids = announcements.map((a) => a.id)
+          if (seenAnnoIds.current) for (const id of ids) seenAnnoIds.current.add(id)
+          localStorage.setItem(SEEN_ANNOS_KEY, JSON.stringify(ids))
+        } catch { /* 持久化失败不影响 */ }
+      }}
       onAccount={() => setAcct(true)}
       unread={!read}
       onDragStart={props.embedded ? (e) => { e.preventDefault() } : (e) => beginDrag('move', e)}

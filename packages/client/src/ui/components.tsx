@@ -496,7 +496,7 @@ export function SourceManager(props: {
             <div className="dshs-pills">
               {s.role === 'primary' ? <span className="dshs-pill primary">主源</span> : <span className="dshs-pill off">备用</span>}
               {s.is_lb ? <span className="dshs-pill lb">⚖️ 负载均衡</span> : <span className="dshs-pill ind">独立源</span>}
-              {s.status === 'connected' ? <span className="dshs-pill primary">已连接</span> : s.status === 'unreachable' ? <span className="dshs-pill err">已断联</span> : <span className="dshs-pill off">未连接</span>}
+              {s.status === 'connected' ? <span className="dshs-pill primary">已连接</span> : s.status === 'connecting' ? <span className="dshs-pill wa">连接中…</span> : s.status === 'unreachable' ? <span className="dshs-pill err">已断联</span> : <span className="dshs-pill off">未连接</span>}
             </div>
           </div>
           <div className="dshs-src-sub">
