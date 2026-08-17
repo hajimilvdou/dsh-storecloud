@@ -148,6 +148,16 @@ npm pack                   # 产出发布 tarball
 
 改 bug 流程：改 `packages/client/src/**`（UI/数据层）→ `npm run build`；改壳层（入口/安装器）→ 直接改 `lib/index.js` / `lib/client.js`。重新发布：`npm pack` + 上传 tarball / push git。
 
+### 发版流程（版本号单一事实来源）
+
+1. **bump 版本**：只改根 `package.json` 的 `version`（如 0.1.0 → 0.2.0）；
+2. **构建**：`npm run build`——自动把版本注入 `packages/client/src/generated-version.ts`（构建产物 `preview.js` 内联）；
+3. **提交**：连同 `generated-version.ts` 与产物一起 `git push`；
+4. **服务器推送**：服务端管理端 → 系统更新 →「客户端插件版本推送」→ 安装地址填 `github:hajimilvdou/dsh-storecloud` → 点 **「🔍 从 GitHub 检测」**自动读回最新版本 → 保存推送；
+5. **用户侧**：客户端（host 半 `/version` RPC 报告真实安装版本）检测到推送版本更新 → 横幅提示 → 一键更新 → 重启 DSH web 生效。
+
+> 版本判断以**实际安装的包版本**为准（git/npm/tgz 安装都准确），不依赖任何手动维护的常量。
+
 ---
 
 ## 服务器端
