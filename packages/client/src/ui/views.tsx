@@ -152,6 +152,20 @@ export function SearchView(props: {
   )
 }
 
+/** Agent 安装状态（多键匹配）：市场条目的 id 可能与实际安装 key（包名/仓库短名/预设名）不一致，
+ *  依次尝试 id / name / preset_name / 仓库短名，命中返回该安装 key；全部未命中返回 null（未安装）。
+ *  保证「Agent 库里有、市场里也有」的条目一定能正确显示在 Agent 库。 */
+function agentInstalledKey(a: Plugin, installed: Installed): string | null {
+  const cands = [a.id, a.name, a.preset_name, a.repo ? a.repo.split('/').pop() ?? '' : '']
+  const seen = new Set<string>()
+  for (const k of cands) {
+    if (!k || seen.has(k)) continue
+    seen.add(k)
+    if (installed[k]) return k
+  }
+  return null
+}
+
 /** Agent 市场：只展示 kind=preset 的自定义 Agent（文件复制安装），与插件/组合分开。 */
 export function AgentView(props: {
   agents: Plugin[]
@@ -165,6 +179,8 @@ export function AgentView(props: {
   const localKw = q.trim().toLowerCase()
   const globalKw = props.query.trim().toLowerCase()
   const kw = localKw || globalKw
+  // 安装 key 预计算（多键匹配，供排序与按钮状态共用）
+  const keyOf = new Map(props.agents.map((a) => [a.id, agentInstalledKey(a, props.installed)]))
   const results = props.agents.filter((a) => {
     if (!kw) return true
     return (
@@ -173,6 +189,12 @@ export function AgentView(props: {
       a.description.toLowerCase().includes(kw) ||
       (a.preset_name ?? '').toLowerCase().includes(kw)
     )
+  })
+  // 与插件库一致：已安装的 Agent 排最前（稳定排序），方便管理/更新。
+  results.sort((a, b) => {
+    const sa = keyOf.get(a.id) ? 0 : 1
+    const sb = keyOf.get(b.id) ? 0 : 1
+    return sa - sb
   })
   const PAGE_SIZE = 60
   const [page, setPage] = useState(1)
@@ -204,15 +226,18 @@ export function AgentView(props: {
               </div>
               <Metrics p={a} />
               <div className="dshs-mrow" style={{ marginTop: 7 }}>
-                {props.installing[a.id] ? (
-                  <button className="dshs-ibtn" disabled>⏳ 安装中…</button>
-                ) : !props.installed[a.id] ? (
-                  <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>安装 Agent</button>
-                ) : props.installed[a.id] !== a.version ? (
-                  <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>更新 Agent</button>
-                ) : (
-                  <button className="dshs-ibtn done" disabled>已安装 ✓</button>
-                )}
+                {(() => {
+                  const iv = keyOf.get(a.id) ? props.installed[keyOf.get(a.id) as string] : null
+                  return props.installing[a.id] ? (
+                    <button className="dshs-ibtn" disabled>⏳ 安装中…</button>
+                  ) : !iv ? (
+                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>安装 Agent</button>
+                  ) : iv !== a.version ? (
+                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>更新 Agent</button>
+                  ) : (
+                    <button className="dshs-ibtn done" disabled>已安装 ✓</button>
+                  )
+                })()}
               </div>
             </div>
           ))}
@@ -241,11 +266,20 @@ export function AgentLibraryView(props: {
   onGoMarket: () => void
 }) {
   const [q, setQ] = useState('')
+  const [uninstallSelected, setUninstallSelected] = useState<Record<string, boolean>>({})
   const kw = q.trim().toLowerCase()
-  const entries = props.agents.filter(
-    (a) => props.installed[a.id] && (!kw || a.name.toLowerCase().includes(kw) || a.id.toLowerCase().includes(kw) || (a.preset_name ?? '').toLowerCase().includes(kw)),
-  )
-  const updates = entries.filter((a) => props.installed[a.id] !== a.version)
+  // 安装 key 预计算：市场有对应条目且本地已装 → 一定能显示（多键匹配 id/name/preset_name/仓库短名）
+  const keyOf = new Map(props.agents.map((a) => [a.id, agentInstalledKey(a, props.installed)]))
+  const entries = props.agents.filter((a) => {
+    if (keyOf.get(a.id) === null || keyOf.get(a.id) === undefined) return false
+    return !kw || a.name.toLowerCase().includes(kw) || a.id.toLowerCase().includes(kw) || (a.preset_name ?? '').toLowerCase().includes(kw)
+  })
+  // 与「已安装插件」显示机制对齐：多选 + 批量删除条
+  const selectedUninstall = entries.filter((a) => uninstallSelected[a.id]).map((a) => a.id)
+  const updates = entries.filter((a) => {
+    const k = keyOf.get(a.id)
+    return k !== null && k !== undefined && props.installed[k] !== a.version
+  })
   return (
     <div>
       <div className="dshs-sec">
@@ -256,13 +290,24 @@ export function AgentLibraryView(props: {
         <input className="dshs-input" placeholder="搜索已安装 Agent…" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="dshs-abtn" style={{ flex: 'none' }} onClick={props.onGoMarket}>去 Agent 市场 →</button>
       </div>
+      <BatchDeleteBar
+        count={selectedUninstall.length}
+        itemName="已安装 Agent"
+        onDelete={() => {
+          selectedUninstall.forEach((id) => props.onUninstall(id))
+          setUninstallSelected({})
+        }}
+        onClear={() => setUninstallSelected({})}
+      />
       {entries.length ? (
         entries.map((a) => {
-          const iv = props.installed[a.id]
-          const up = iv !== a.version
+          const k = keyOf.get(a.id)
+          const iv = k ? props.installed[k] : null
+          const up = k !== null && k !== undefined && iv !== a.version
           return (
             <div className="dshs-vcard" key={a.id}>
               <div className="dshs-l1">
+                <input type="checkbox" checked={!!uninstallSelected[a.id]} onChange={() => setUninstallSelected({ ...uninstallSelected, [a.id]: !uninstallSelected[a.id] })} />
                 <span className="dshs-nm">{a.name}</span>
                 {typeBadge(a)}
                 <span className="dshs-compat">preset/{a.preset_name ?? a.name}</span>
@@ -1073,14 +1118,16 @@ export function MyView(props: {
         </div>
       ) : null}
 
-      <div className="dshs-sec" style={{ marginTop: 10 }}>
-        🔵 更新提醒
-        <span>{unacked.length ? unacked.length + ' 个插件可更新' : '全部最新'}</span>
-      </div>
-      <div className="dshs-mem" style={{ borderColor: unacked.length ? 'rgba(59,158,255,.5)' : undefined }}>
+      <div className="dshs-mem" style={{ marginTop: 10, borderColor: unacked.length ? 'rgba(59,158,255,.5)' : undefined }}>
         <span className="dshs-nm" style={{ fontWeight: 600 }}>🔵 更新提醒</span>
-        <span className="dshs-compat">{unacked.length ? unacked.length + ' 个插件可更新' : '全部最新'}</span>
-        {unacked.length ? <button className="dshs-abtn" onClick={props.onAckAll}>全部已知</button> : null}
+        {unacked.length ? (
+          <>
+            <span className="dshs-compat">{unacked.length} 个插件可更新（见下方已安装列表）</span>
+            <button className="dshs-abtn" onClick={props.onAckAll} title="将当前可更新插件标记为已知，不再计入提醒">全部已知</button>
+          </>
+        ) : (
+          <span className="dshs-compat" style={{ color: 'var(--up, #2ea043)' }}>全部最新 ✓</span>
+        )}
       </div>
 
       <div className="dshs-sec" style={{ marginTop: 10 }}>
