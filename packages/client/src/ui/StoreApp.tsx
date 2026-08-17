@@ -162,17 +162,26 @@ export function StoreApp(props: {
   useEffect(() => {
     const ids = new Set(announcements.map((a) => a.id))
     if (seenAnnoIds.current === null) {
-      // 首次（iframe 重建）：恢复持久化已见集合；无记录时以当前集合为基准（不误亮）
+      // 首次（iframe 重建）：恢复持久化已见集合；
+      // 恢复成功 → 继续比对（上次会话之后到达的新公告要亮红点）；
+      // 无记录 → 以当前集合为基准（不误亮）。
+      let restored: Set<string> | null = null
       try {
         const raw = localStorage.getItem(SEEN_ANNOS_KEY)
         if (raw) {
           const list = JSON.parse(raw) as string[]
-          seenAnnoIds.current = new Set(list.filter((x) => typeof x === 'string'))
+          restored = new Set(list.filter((x) => typeof x === 'string'))
         }
       } catch {
         /* 数据损坏忽略 */
       }
-      if (seenAnnoIds.current === null) seenAnnoIds.current = ids
+      if (restored) {
+        const fresh2 = [...ids].some((id) => !restored.has(id))
+        seenAnnoIds.current = ids
+        if (fresh2) setRead(false)
+        return
+      }
+      seenAnnoIds.current = ids
       return
     }
     const fresh = [...ids].some((id) => !(seenAnnoIds.current as Set<string>).has(id))
