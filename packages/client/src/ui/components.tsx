@@ -258,6 +258,17 @@ export function TopBar(props: {
           onChange={(e) => props.onQuery(e.target.value)}
         />
       </div>
+      <a
+        className="dshs-ico"
+        style={{ textDecoration: 'none', fontSize: 15 }}
+        href="https://github.com/hajimilvdou/dsh-store-server"
+        target="_blank"
+        rel="noreferrer"
+        title="项目地址：github.com/hajimilvdou/dsh-store-server"
+        onMouseDown={stop}
+      >
+        📦
+      </a>
       <button className="dshs-ico" title="明暗切换" onMouseDown={stop} onClick={props.onTheme}>
         {props.theme === 'dark' ? '☾' : '☀'}
       </button>
