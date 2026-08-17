@@ -512,8 +512,13 @@ export function StoreApp(props: {
     setCloud({ plugins: [], combos: [], agents: [] })
     void props.bridge.bootstrap().then(applyState)
   }
-  const doPushCloud = async () => {
-    const c = await props.bridge.pushCloud()
+  const doPushCloud = async () => {    const c = await props.bridge.pushCloud()
+    setCloud(c)
+    return c
+  }
+  /** 手动挑选上传（云端已有 + 勾选新增；未勾选的本地项不进云端）。 */
+  const doUploadSelected = async (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => {
+    const c = await props.bridge.uploadSelected(scope)
     setCloud(c)
     return c
   }
@@ -556,6 +561,7 @@ export function StoreApp(props: {
         onPushCloud={doPushCloud}
         onRefreshCloud={doRefreshCloud}
         onRestorePlugins={doRestorePlugins}
+        onUploadSelected={doUploadSelected}
         onUpdate={doUpdate}
         onUninstall={doUninstall}
         onAckAll={doAckAll}
@@ -575,6 +581,7 @@ export function StoreApp(props: {
         onPushCloud={doPushCloud}
         onRefreshCloud={doRefreshCloud}
         onRestoreSubs={doRestoreSubs}
+        onUploadSelected={doUploadSelected}
       />
     ) : (
       <AgentLibraryView
@@ -588,6 +595,7 @@ export function StoreApp(props: {
         onPushCloud={doPushCloud}
         onRefreshCloud={doRefreshCloud}
         onRestoreAgents={doRestoreAgents}
+        onUploadSelected={doUploadSelected}
       />
     )
 

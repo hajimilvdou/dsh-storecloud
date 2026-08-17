@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import type { Combo, Plugin } from '@dsh-store/shared'
 import type { PluginSortKey } from '../core/index.js'
 import { agentInstalledKey, type CloudList, type ComboMemberInput } from './bridge.js'
@@ -6,7 +6,7 @@ import { BatchDeleteBar, ConfirmDelete, Desc, hasUpdate, installHint, Metrics, s
 
 type Installed = Record<string, string>
 
-/** 安装按钮：Plugin 走 dsh plugin add；Agent(Preset) 走复制安装；只有 Plugin 参与版本更新。 */
+/** 瀹夎鎸夐挳锛歅lugin 璧?dsh plugin add锛汚gent(Preset) 璧板鍒跺畨瑁咃紱鍙湁 Plugin 鍙備笌鐗堟湰鏇存柊銆?*/
 function pluginBtn(
   p: Plugin,
   installed: Installed,
@@ -18,17 +18,17 @@ function pluginBtn(
   const busy = installing[p.id]
   const isPreset = p.kind === 'preset'
   const presetName = p.preset_name ?? p.name
-  if (busy) return <button className="dshs-ibtn" disabled>⏳ 安装中…</button>
+  if (busy) return <button className="dshs-ibtn" disabled>鈴?瀹夎涓€?/button>
   if (!installed[p.id]) {
     return isPreset
-      ? <button className="dshs-ibtn" onClick={() => onInstallPreset(p.id, presetName)} title={installHint(p)}>安装 Agent</button>
-      : <button className="dshs-ibtn" onClick={() => onInstall(p.id)} title={installHint(p)}>一键安装</button>
+      ? <button className="dshs-ibtn" onClick={() => onInstallPreset(p.id, presetName)} title={installHint(p)}>瀹夎 Agent</button>
+      : <button className="dshs-ibtn" onClick={() => onInstall(p.id)} title={installHint(p)}>涓€閿畨瑁?/button>
   }
-  if (!isPreset && hasUpdate(p, installed)) return <button className="dshs-ibtn" onClick={() => onUpdate(p.id)} title={`更新：dsh plugin add ${p.install ?? p.id}@${p.version}`}>更新</button>
-  return <button className="dshs-ibtn done" disabled title={isPreset ? installHint(p) : `已安装：dsh plugin add ${p.install ?? p.id}`}>已安装 ✓</button>
+  if (!isPreset && hasUpdate(p, installed)) return <button className="dshs-ibtn" onClick={() => onUpdate(p.id)} title={`鏇存柊锛歞sh plugin add ${p.install ?? p.id}@${p.version}`}>鏇存柊</button>
+  return <button className="dshs-ibtn done" disabled title={isPreset ? installHint(p) : `宸插畨瑁咃細dsh plugin add ${p.install ?? p.id}`}>宸插畨瑁?鉁?/button>
 }
 
-/** 插件页：趋势横滑 + 本地搜索 + 排序 + 列表；订阅组内插件有更新也在此显示。 */
+/** 鎻掍欢椤碉細瓒嬪娍妯粦 + 鏈湴鎼滅储 + 鎺掑簭 + 鍒楄〃锛涜闃呯粍鍐呮彃浠舵湁鏇存柊涔熷湪姝ゆ樉绀恒€?*/
 export function SearchView(props: {
   trending: Plugin[]
   results: Plugin[]
@@ -44,8 +44,7 @@ export function SearchView(props: {
   onPublish: () => void
   onOpenAccount: () => void
 }) {
-  // 服务器插件库有 3000+ 条目：结果分页渲染，避免一次渲染几千张卡片导致面板卡顿。
-  const PAGE_SIZE = 80
+  // 鏈嶅姟鍣ㄦ彃浠跺簱鏈?3000+ 鏉＄洰锛氱粨鏋滃垎椤垫覆鏌擄紝閬垮厤涓€娆℃覆鏌撳嚑鍗冨紶鍗＄墖瀵艰嚧闈㈡澘鍗￠】銆?  const PAGE_SIZE = 80
   const [page, setPage] = useState(1)
   useEffect(() => { setPage(1) }, [props.query, props.sort])
   const shown = props.results.slice(0, page * PAGE_SIZE)
@@ -53,16 +52,16 @@ export function SearchView(props: {
   return (
     <div>
       <div className="dshs-sec">
-        📈 今日星增 Top 20
-        <span>每日更新 · 横滑查看 →</span>
+        馃搱 浠婃棩鏄熷 Top 20
+        <span>姣忔棩鏇存柊 路 妯粦鏌ョ湅 鈫?/span>
       </div>
       {props.trending.length ? (
         <div className="dshs-hscroll">
           {props.trending.map((p, i) => (
             <div className="dshs-tcard" key={p.id + ':' + i}>
-              <span className="dshs-rk">#{i + 1}{p.is_new ? ' 🆕' : ''}</span>
+              <span className="dshs-rk">#{i + 1}{p.is_new ? ' 馃啎' : ''}</span>
               <span className="dshs-nm">{p.name}</span>
-              <span style={{ fontSize: 10.5, color: 'var(--tx2)' }}>by {p.author ?? '—'}</span>
+              <span style={{ fontSize: 10.5, color: 'var(--tx2)' }}>by {p.author ?? '鈥?}</span>
               {typeBadge(p)}
               <Desc text={p.description} />
               <Metrics p={p} />
@@ -74,23 +73,21 @@ export function SearchView(props: {
           ))}
         </div>
       ) : (
-        <div className="dshs-empty" style={{ padding: 12 }}>趋势榜在首次收录次日生成（需前一天星数快照差分），暂无数据</div>
+        <div className="dshs-empty" style={{ padding: 12 }}>瓒嬪娍姒滃湪棣栨鏀跺綍娆℃棩鐢熸垚锛堥渶鍓嶄竴澶╂槦鏁板揩鐓у樊鍒嗭級锛屾殏鏃犳暟鎹?/div>
       )}
 
       <div className="dshs-sec" style={{ marginTop: 12 }}>
-        🔍 插件搜索
+        馃攳 鎻掍欢鎼滅储
         <span>
-          本地搜索 · 零网络 · {props.results.length} 个结果
-          <button className="dshs-abtn" style={{ marginLeft: 8 }} onClick={props.onPublish}>发布插件 ↗</button>
+          鏈湴鎼滅储 路 闆剁綉缁?路 {props.results.length} 涓粨鏋?          <button className="dshs-abtn" style={{ marginLeft: 8 }} onClick={props.onPublish}>鍙戝竷鎻掍欢 鈫?/button>
         </span>
       </div>
       <div className="dshs-sortbar">
-        排序：
-        {(
+        鎺掑簭锛?        {(
           [
-            ['default', '综合'],
-            ['stars', '⭐ 星数'],
-            ['stars7', '⭐ 近7天收藏'],
+            ['default', '缁煎悎'],
+            ['stars', '猸?鏄熸暟'],
+            ['stars7', '猸?杩?澶╂敹钘?],
           ] as Array<[PluginSortKey, string]>
         ).map(([k, label]) => (
           <button key={k} className={props.sort === k ? 'on' : ''} onClick={() => props.onSort(k)}>
@@ -106,11 +103,11 @@ export function SearchView(props: {
               <div className="dshs-vcard" key={p.id + ':' + p.repo}>
                 <div className="dshs-l1">
                   <span className="dshs-nm">{p.name}</span>
-                  <span style={{ fontSize: 10.5, color: 'var(--tx2)' }}>by {p.author ?? '—'}</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--tx2)' }}>by {p.author ?? '鈥?}</span>
                   {typeBadge(p)}
                   {sourceBadge(p)}
-                  {up && p.kind !== 'preset' ? <span className="dshs-updot">有更新 v{props.installed[p.id]} → v{p.version}</span> : null}
-                  <span className="dshs-compat">{p.kind === 'preset' ? 'Agent 预设' : 'dsh ≥0.1.0-rc.5'}</span>
+                  {up && p.kind !== 'preset' ? <span className="dshs-updot">鏈夋洿鏂?v{props.installed[p.id]} 鈫?v{p.version}</span> : null}
+                  <span className="dshs-compat">{p.kind === 'preset' ? 'Agent 棰勮' : 'dsh 鈮?.1.0-rc.5'}</span>
                   {srcLink(p)}
                 </div>
                 <Desc text={p.description} style={{ margin: '5px 0 7px' }} />
@@ -124,26 +121,25 @@ export function SearchView(props: {
           {rest > 0 ? (
             <div className="dshs-mrow" style={{ marginTop: 8 }}>
               <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => setPage(page + 1)}>
-                ↓ 加载更多（还有 {rest} 个）
+                鈫?鍔犺浇鏇村锛堣繕鏈?{rest} 涓級
               </button>
             </div>
           ) : null}
         </>
       ) : (
         <div className="dshs-empty">
-          未找到匹配插件 — 支持按名称 / 简介 / 作者 / 仓库 / 安装地址搜索
+          鏈壘鍒板尮閰嶆彃浠?鈥?鏀寔鎸夊悕绉?/ 绠€浠?/ 浣滆€?/ 浠撳簱 / 瀹夎鍦板潃鎼滅储
           {props.loggedIn ? (
             <div className="dshs-subnote" style={{ marginTop: 10, marginBottom: 8 }}>
-              💡 找不到就上报插件名，我们会持续跟进并尽快收录。
-            </div>
+              馃挕 鎵句笉鍒板氨涓婃姤鎻掍欢鍚嶏紝鎴戜滑浼氭寔缁窡杩涘苟灏藉揩鏀跺綍銆?            </div>
           ) : null}
           <div style={{ marginTop: 4 }}>
             {props.loggedIn ? (
               <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={props.onPublish}>
-                📤 上报{props.query.trim() ? `「${props.query.trim()}」` : '插件'}
+                馃摛 涓婃姤{props.query.trim() ? `銆?{props.query.trim()}銆峘 : '鎻掍欢'}
               </button>
             ) : (
-              <button className="dshs-abtn" onClick={props.onOpenAccount}>登录 GitHub 后即可上报插件 →</button>
+              <button className="dshs-abtn" onClick={props.onOpenAccount}>鐧诲綍 GitHub 鍚庡嵆鍙笂鎶ユ彃浠?鈫?/button>
             )}
           </div>
         </div>
@@ -152,11 +148,11 @@ export function SearchView(props: {
   )
 }
 
-/** Agent 市场：只展示 kind=preset 的自定义 Agent（文件复制安装），与插件/组合分开。 */
+/** Agent 甯傚満锛氬彧灞曠ず kind=preset 鐨勮嚜瀹氫箟 Agent锛堟枃浠跺鍒跺畨瑁咃級锛屼笌鎻掍欢/缁勫悎鍒嗗紑銆?*/
 export function AgentView(props: {
   agents: Plugin[]
   installed: Installed
-  /** 顶部全局搜索词（在 Agent 页同样生效）。 */
+  /** 椤堕儴鍏ㄥ眬鎼滅储璇嶏紙鍦?Agent 椤靛悓鏍风敓鏁堬級銆?*/
   query: string
   installing: Record<string, boolean>
   onInstallPreset: (pkg: string, presetName?: string) => void
@@ -165,7 +161,7 @@ export function AgentView(props: {
   const localKw = q.trim().toLowerCase()
   const globalKw = props.query.trim().toLowerCase()
   const kw = localKw || globalKw
-  // 安装 key 预计算（多键匹配，供排序与按钮状态共用）
+  // 瀹夎 key 棰勮绠楋紙澶氶敭鍖归厤锛屼緵鎺掑簭涓庢寜閽姸鎬佸叡鐢級
   const keyOf = new Map(props.agents.map((a) => [a.id, agentInstalledKey(a, props.installed)]))
   const results = props.agents.filter((a) => {
     if (!kw) return true
@@ -176,8 +172,7 @@ export function AgentView(props: {
       (a.preset_name ?? '').toLowerCase().includes(kw)
     )
   })
-  // 与插件库一致：已安装的 Agent 排最前（稳定排序），方便管理/更新。
-  results.sort((a, b) => {
+  // 涓庢彃浠跺簱涓€鑷达細宸插畨瑁呯殑 Agent 鎺掓渶鍓嶏紙绋冲畾鎺掑簭锛夛紝鏂逛究绠＄悊/鏇存柊銆?  results.sort((a, b) => {
     const sa = keyOf.get(a.id) ? 0 : 1
     const sb = keyOf.get(b.id) ? 0 : 1
     return sa - sb
@@ -190,11 +185,11 @@ export function AgentView(props: {
   return (
     <div>
       <div className="dshs-sec">
-        🤖 Agent 市场
-        <span>{props.agents.length} 个 · 安装到 ~/.dsh/.agent-presets/</span>
+        馃 Agent 甯傚満
+        <span>{props.agents.length} 涓?路 瀹夎鍒?~/.dsh/.agent-presets/</span>
       </div>
       <div className="dshs-frow">
-        <input className="dshs-input" placeholder="搜索 Agent 名称 / 预设名 / 简介…（也可用顶部搜索框）" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="dshs-input" placeholder="鎼滅储 Agent 鍚嶇О / 棰勮鍚?/ 绠€浠嬧€︼紙涔熷彲鐢ㄩ《閮ㄦ悳绱㈡锛? value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {shown.length ? (
         <>
@@ -203,25 +198,25 @@ export function AgentView(props: {
               <div className="dshs-l1">
                 <span className="dshs-nm">{a.name}</span>
                 {typeBadge(a)}
-                <span className="dshs-compat">by {a.author ?? '—'}</span>
+                <span className="dshs-compat">by {a.author ?? '鈥?}</span>
                 {srcLink(a)}
               </div>
               <Desc text={a.description} style={{ margin: '5px 0 7px' }} />
               <div className="dshs-subnote" style={{ marginBottom: 8 }}>
-                📁 preset/{a.preset_name ?? a.name} → ~/.dsh/.agent-presets/{a.preset_name ?? a.name} · 重启后新建空白会话选择
+                馃搧 preset/{a.preset_name ?? a.name} 鈫?~/.dsh/.agent-presets/{a.preset_name ?? a.name} 路 閲嶅惎鍚庢柊寤虹┖鐧戒細璇濋€夋嫨
               </div>
               <Metrics p={a} />
               <div className="dshs-mrow" style={{ marginTop: 7 }}>
                 {(() => {
                   const iv = keyOf.get(a.id) ? props.installed[keyOf.get(a.id) as string] : null
                   return props.installing[a.id] ? (
-                    <button className="dshs-ibtn" disabled>⏳ 安装中…</button>
+                    <button className="dshs-ibtn" disabled>鈴?瀹夎涓€?/button>
                   ) : !iv ? (
-                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>安装 Agent</button>
+                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>瀹夎 Agent</button>
                   ) : iv !== a.version ? (
-                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>更新 Agent</button>
+                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>鏇存柊 Agent</button>
                   ) : (
-                    <button className="dshs-ibtn done" disabled>已安装 ✓</button>
+                    <button className="dshs-ibtn done" disabled>宸插畨瑁?鉁?/button>
                   )
                 })()}
               </div>
@@ -230,19 +225,19 @@ export function AgentView(props: {
           {rest > 0 ? (
             <div className="dshs-mrow" style={{ marginTop: 8 }}>
               <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => setPage(page + 1)}>
-                ↓ 加载更多（还有 {rest} 个）
+                鈫?鍔犺浇鏇村锛堣繕鏈?{rest} 涓級
               </button>
             </div>
           ) : null}
         </>
       ) : (
-        <div className="dshs-empty">{kw ? '未找到匹配的 Agent 预设' : '暂无 Agent 预设'}</div>
+        <div className="dshs-empty">{kw ? '鏈壘鍒板尮閰嶇殑 Agent 棰勮' : '鏆傛棤 Agent 棰勮'}</div>
       )}
     </div>
   )
 }
 
-/** Agent 库：管理已安装的 Agent（更新 / 删除 / 云端同步），设计对齐插件库与组合库。 */
+/** Agent 搴擄細绠＄悊宸插畨瑁呯殑 Agent锛堟洿鏂?/ 鍒犻櫎 / 浜戠鍚屾锛夛紝璁捐瀵归綈鎻掍欢搴撲笌缁勫悎搴撱€?*/
 export function AgentLibraryView(props: {
   agents: Plugin[]
   installed: Installed
@@ -254,7 +249,7 @@ export function AgentLibraryView(props: {
   onPushCloud: () => Promise<CloudList>
   onRefreshCloud: () => Promise<CloudList>
   onRestoreAgents: (ids: string[]) => void
-  /** 手动挑选上传 Agent（云端已有 + 勾选新增）。 */
+  /** 鎵嬪姩鎸戦€変笂浼?Agent锛堜簯绔凡鏈?+ 鍕鹃€夋柊澧烇級銆?*/
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
 }) {
   const [q, setQ] = useState('')
@@ -262,48 +257,46 @@ export function AgentLibraryView(props: {
   const [cloudOpen, setCloudOpen] = useState(false)
   const [cloudMsg, setCloudMsg] = useState<string | null>(null)
   const [agentSel, setAgentSel] = useState<Record<string, boolean>>({})
-  const kw = q.trim().toLowerCase()
-  // 安装 key 预计算：市场有对应条目且本地已装 → 一定能显示（多键匹配 id/name/preset_name/仓库短名）
-  const keyOf = new Map(props.agents.map((a) => [a.id, agentInstalledKey(a, props.installed)]))
-  // 待上传 Agent：本地已装（多键匹配）但云端清单里没有的市场条目
+  // 閫夋嫨涓婁紶锛氭湰鍦板凡瑁?Agent锛堝閿尮閰嶏級浣嗕簯绔病鏈夌殑甯傚満鏉＄洰
   const cloudAgentSet = new Set(props.cloud.agents)
-  const pendingAgents = props.agents.filter((a) => keyOf.get(a.id) !== null && keyOf.get(a.id) !== undefined && !cloudAgentSet.has(a.id))
+  const pendingAgents = props.agents.filter((a) => agentInstalledKey(a, props.installed) !== null && !cloudAgentSet.has(a.id))
+  const kw = q.trim().toLowerCase()
+  // 瀹夎 key 棰勮绠楋細甯傚満鏈夊搴旀潯鐩笖鏈湴宸茶 鈫?涓€瀹氳兘鏄剧ず锛堝閿尮閰?id/name/preset_name/浠撳簱鐭悕锛?  const keyOf = new Map(props.agents.map((a) => [a.id, agentInstalledKey(a, props.installed)]))
   const entries = props.agents.filter((a) => {
     if (keyOf.get(a.id) === null || keyOf.get(a.id) === undefined) return false
     return !kw || a.name.toLowerCase().includes(kw) || a.id.toLowerCase().includes(kw) || (a.preset_name ?? '').toLowerCase().includes(kw)
   })
-  // 与「已安装插件」显示机制对齐：多选 + 批量删除条
-  const selectedUninstall = entries.filter((a) => uninstallSelected[a.id]).map((a) => a.id)
+  // 涓庛€屽凡瀹夎鎻掍欢銆嶆樉绀烘満鍒跺榻愶細澶氶€?+ 鎵归噺鍒犻櫎鏉?  const selectedUninstall = entries.filter((a) => uninstallSelected[a.id]).map((a) => a.id)
   const updates = entries.filter((a) => {
     const k = keyOf.get(a.id)
     return k !== null && k !== undefined && props.installed[k] !== a.version
   })
   return (
     <div>
-      {/* 云端 Agent 折叠卡片：与插件库云端同款交互 */}
+      {/* 浜戠 Agent 鎶樺彔鍗＄墖锛氫笌鎻掍欢搴撲簯绔悓娆句氦浜?*/}
       <div className="dshs-cloudcard" style={{ marginTop: 10 }}>
         <div className="dshs-cloudcard-h" onClick={() => setCloudOpen(!cloudOpen)}>
-          <span className="dshs-nm" style={{ fontWeight: 600 }}>☁️ 云端 Agent</span>
-          <span className="dshs-compat">{props.cloud.agents.length} 个已保存</span>
-          <span className="dshs-cloudcard-arrow">{cloudOpen ? '收起 ▴' : '展开 ▾'}</span>
+          <span className="dshs-nm" style={{ fontWeight: 600 }}>鈽侊笍 浜戠 Agent</span>
+          <span className="dshs-compat">{props.cloud.agents.length} 涓凡淇濆瓨</span>
+          <span className="dshs-cloudcard-arrow">{cloudOpen ? '鏀惰捣 鈻? : '灞曞紑 鈻?}</span>
         </div>
         {cloudOpen ? (
           <div className="dshs-cloudcard-body">
-            <div className="dshs-subnote">云端保存的是你手动上传的 Agent 清单（不自动同步）。勾选后「恢复所选」；已安装的会自动跳过。</div>
+            <div className="dshs-subnote">浜戠淇濆瓨鐨勬槸浣犳墜鍔ㄤ笂浼犵殑 Agent 娓呭崟锛堜笉鑷姩鍚屾锛夈€傚嬀閫夊悗銆屾仮澶嶆墍閫夈€嶏紱宸插畨瑁呯殑浼氳嚜鍔ㄨ烦杩囥€?/div>
             <div className="dshs-actions" style={{ marginTop: 6 }}>
-              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在上传本地到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>☁ 上传本地到云端</button>
-              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>↻ 从云端刷新</button>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('姝ｅ湪涓婁紶鏈湴鍒颁簯绔€?); void props.onPushCloud().then((c) => setCloudMsg(`宸蹭笂浼狅細鎻掍欢 ${c.plugins.length} 路 缁勫悎 ${c.combos.length} 路 Agent ${c.agents.length}`)) }}>鈽?涓婁紶鏈湴鍒颁簯绔?/button>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('姝ｅ湪浠庝簯绔埛鏂扳€?); void props.onRefreshCloud().then((c) => setCloudMsg(`浜戠娓呭崟锛氭彃浠?${c.plugins.length} 路 缁勫悎 ${c.combos.length} 路 Agent ${c.agents.length}`)) }}>鈫?浠庝簯绔埛鏂?/button>
               <button className="dshs-abtn pri" onClick={() => {
                 const ids = props.cloud.agents.filter((a) => agentSel[a])
                 props.onRestoreAgents(ids)
-                setCloudMsg(`已开始恢复 ${ids.length} 个云端 Agent`)
-              }}>恢复所选</button>
+                setCloudMsg(`宸插紑濮嬫仮澶?${ids.length} 涓簯绔?Agent`)
+              }}>鎭㈠鎵€閫?/button>
               <button className="dshs-abtn" onClick={() => {
-                const ok = window.confirm('⚠️ 一键全部恢复会复制所有云端 Agent 的预设目录到 ~/.dsh/.agent-presets/。部分 Agent 结构特殊可能导致失败，建议优先用「恢复所选」。')
+                const ok = window.confirm('鈿狅笍 涓€閿叏閮ㄦ仮澶嶄細澶嶅埗鎵€鏈変簯绔?Agent 鐨勯璁剧洰褰曞埌 ~/.dsh/.agent-presets/銆傞儴鍒?Agent 缁撴瀯鐗规畩鍙兘瀵艰嚧澶辫触锛屽缓璁紭鍏堢敤銆屾仮澶嶆墍閫夈€嶃€?)
                 if (!ok) return
                 props.onRestoreAgents(props.cloud.agents)
-                setCloudMsg(`已开始恢复 ${props.cloud.agents.length} 个云端 Agent`)
-              }}>⚡ 全部恢复（带提醒）</button>
+                setCloudMsg(`宸插紑濮嬫仮澶?${props.cloud.agents.length} 涓簯绔?Agent`)
+              }}>鈿?鍏ㄩ儴鎭㈠锛堝甫鎻愰啋锛?/button>
             </div>
             {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
             <div className="dshs-cloud-scroll">
@@ -314,33 +307,33 @@ export function AgentLibraryView(props: {
                   return (
                     <div className="dshs-pick" key={id} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setAgentSel({ ...agentSel, [id]: !agentSel[id] }) }}>
                       <input type="checkbox" checked={!!agentSel[id]} onChange={() => setAgentSel({ ...agentSel, [id]: !agentSel[id] })} />
-                      <span className="dshs-nm" style={{ fontWeight: 600 }}>🤖 {a?.name ?? id}</span>
-                      {a?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {a.author}</span> : null}
+                      <span className="dshs-nm" style={{ fontWeight: 600 }}>馃 {a?.name ?? id}</span>
+                      {a?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>馃懁 {a.author}</span> : null}
                       {a?.repo_url ? (
-                        <a className="dshs-lk" href={a.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.repo_url}>🔗 仓库</a>
+                        <a className="dshs-lk" href={a.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.repo_url}>馃敆 浠撳簱</a>
                       ) : null}
-                      {iv ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+                      {iv ? <span className="dshs-pill primary">宸茶</span> : <span className="dshs-pill off">鏈</span>}
                     </div>
                   )
                 })
               ) : (
-                <div className="dshs-empty" style={{ padding: 10 }}>云端暂无 Agent（登录后点击「上传本地到云端」保存）</div>
+                <div className="dshs-empty" style={{ padding: 10 }}>浜戠鏆傛棤 Agent锛堢櫥褰曞悗鐐瑰嚮銆屼笂浼犳湰鍦板埌浜戠銆嶄繚瀛橈級</div>
               )}
             </div>
-            {/* 手动选择上传 Agent */}
+            {/* 鎵嬪姩閫夋嫨涓婁紶 Agent */}
             {pendingAgents.length ? (
               <>
-                <div className="dshs-subnote" style={{ marginTop: 8 }}>🛫 待上传（本机已装、尚未进云端）：勾选后点「上传所选」</div>
+                <div className="dshs-subnote" style={{ marginTop: 8 }}>馃洬 寰呬笂浼狅紙鏈満宸茶銆佸皻鏈繘浜戠锛夛細鍕鹃€夊悗鐐广€屼笂浼犳墍閫夈€?/div>
                 <div className="dshs-cloud-scroll">
                   {pendingAgents.map((a) => (
                     <div className="dshs-pick" key={a.id} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setAgentSel({ ...agentSel, [a.id]: !agentSel[a.id] }) }}>
                       <input type="checkbox" checked={!!agentSel[a.id]} onChange={() => setAgentSel({ ...agentSel, [a.id]: !agentSel[a.id] })} />
-                      <span className="dshs-nm" style={{ fontWeight: 600 }}>🤖 {a.name}</span>
-                      {a.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {a.author}</span> : null}
+                      <span className="dshs-nm" style={{ fontWeight: 600 }}>馃 {a.name}</span>
+                      {a.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>馃懁 {a.author}</span> : null}
                       {a.repo_url ? (
-                        <a className="dshs-lk" href={a.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.repo_url}>🔗 仓库</a>
+                        <a className="dshs-lk" href={a.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.repo_url}>馃敆 浠撳簱</a>
                       ) : null}
-                      <span className="dshs-badge wa">未同步</span>
+                      <span className="dshs-badge wa">鏈悓姝?/span>
                     </div>
                   ))}
                 </div>
@@ -349,31 +342,29 @@ export function AgentLibraryView(props: {
                   style={{ marginTop: 6, marginLeft: 'auto', display: 'block' }}
                   onClick={() => {
                     const sel = Object.keys(agentSel).filter((k) => agentSel[k])
-                    setCloudMsg('正在上传所选 Agent…')
-                    void props.onUploadSelected({ agents: sel }).then(() => setCloudMsg(`已上传所选：${sel.length} 个 Agent`)).catch((e) => setCloudMsg(`上传失败：${String((e as Error)?.message ?? e)}`))
+                    setCloudMsg('姝ｅ湪涓婁紶鎵€閫?Agent鈥?)
+                    void props.onUploadSelected?.({ agents: sel }).then((c) => setCloudMsg(`宸蹭笂浼犳墍閫夛細${sel.length} 涓?Agent`))
                     setAgentSel({})
                   }}
                 >
-                  ↑ 上传所选（{Object.keys(agentSel).filter((k) => agentSel[k]).length}）
-                </button>
+                  鈫?涓婁紶鎵€閫夛紙{Object.keys(agentSel).filter((k) => agentSel[k]).length}锛?                </button>
               </>
             ) : (
-              <div className="dshs-subnote" style={{ marginTop: 6 }}>✅ 本机 Agent 已全部同步到云端。</div>
+              <div className="dshs-subnote" style={{ marginTop: 6 }}>鉁?鏈満 Agent 宸插叏閮ㄥ悓姝ュ埌浜戠銆?/div>
             )}
           </div>
         ) : null}
       </div>
       <div className="dshs-sec" style={{ marginTop: 10 }}>
-        🤖 Agent 库
-        <span>{entries.length} 个已安装 · {updates.length} 个可更新</span>
+        馃 Agent 搴?        <span>{entries.length} 涓凡瀹夎 路 {updates.length} 涓彲鏇存柊</span>
       </div>
       <div className="dshs-frow">
-        <input className="dshs-input" placeholder="搜索已安装 Agent…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="dshs-abtn" style={{ flex: 'none' }} onClick={props.onGoMarket}>去 Agent 市场 →</button>
+        <input className="dshs-input" placeholder="鎼滅储宸插畨瑁?Agent鈥? value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="dshs-abtn" style={{ flex: 'none' }} onClick={props.onGoMarket}>鍘?Agent 甯傚満 鈫?/button>
       </div>
       <BatchDeleteBar
         count={selectedUninstall.length}
-        itemName="已安装 Agent"
+        itemName="宸插畨瑁?Agent"
         onDelete={() => {
           selectedUninstall.forEach((id) => props.onUninstall(id))
           setUninstallSelected({})
@@ -394,39 +385,39 @@ export function AgentLibraryView(props: {
                 <span className="dshs-compat">preset/{a.preset_name ?? a.name}</span>
               </div>
               <div className="dshs-subnote" style={{ margin: '6px 0' }}>
-                {installHint(a)} · 当前版本 v{iv}
-                {up ? <span className="dshs-updot" style={{ marginLeft: 8 }}>有更新 v{a.version}</span> : null}
+                {installHint(a)} 路 褰撳墠鐗堟湰 v{iv}
+                {up ? <span className="dshs-updot" style={{ marginLeft: 8 }}>鏈夋洿鏂?v{a.version}</span> : null}
               </div>
               <div className="dshs-actions">
                 {up ? (
                   props.installing[a.id] ? (
-                    <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
+                    <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>鈴?鏇存柊涓€?/button>
                   ) : (
-                    <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>更新 Agent</button>
+                    <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>鏇存柊 Agent</button>
                   )
                 ) : null}
-                <ConfirmDelete label="卸载" confirmText="确认卸载" onConfirm={() => props.onUninstall(a.id)} />
+                <ConfirmDelete label="鍗歌浇" confirmText="纭鍗歌浇" onConfirm={() => props.onUninstall(a.id)} />
               </div>
             </div>
           )
         })
       ) : (
-        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已安装 Agent' : '尚未安装任何 Agent，可去 Agent 市场安装'}</div>
+        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '鏈壘鍒板尮閰嶇殑宸插畨瑁?Agent' : '灏氭湭瀹夎浠讳綍 Agent锛屽彲鍘?Agent 甯傚満瀹夎'}</div>
       )}
     </div>
   )
 }
 
-/** 组合页：浏览/创建/编辑组合；创建/编辑 = 大弹窗勾选成员（一键全选 + 搜索 + 库内校验 + 每插件安装方式）。 */
+/** 缁勫悎椤碉細娴忚/鍒涘缓/缂栬緫缁勫悎锛涘垱寤?缂栬緫 = 澶у脊绐楀嬀閫夋垚鍛橈紙涓€閿叏閫?+ 鎼滅储 + 搴撳唴鏍￠獙 + 姣忔彃浠跺畨瑁呮柟寮忥級銆?*/
 export function ComboView(props: {
   combos: Combo[]
   plugins: Plugin[]
   subscriptions: Record<string, boolean>
   installed: Installed
   loggedIn: boolean
-  /** 当前登录 GitHub 账号：用于把“我的组合”提到最前面。 */
+  /** 褰撳墠鐧诲綍 GitHub 璐﹀彿锛氱敤浜庢妸鈥滄垜鐨勭粍鍚堚€濇彁鍒版渶鍓嶉潰銆?*/
   myLogin: string
-  /** 顶部全局搜索词（过滤推荐组合）。 */
+  /** 椤堕儴鍏ㄥ眬鎼滅储璇嶏紙杩囨护鎺ㄨ崘缁勫悎锛夈€?*/
   query: string
   installing: Record<string, boolean>
   onLogin: () => void
@@ -435,7 +426,7 @@ export function ComboView(props: {
   onAddCombo: (name: string, desc: string, members: ComboMemberInput[]) => void
   onUpdateCombo: (id: string, name: string, desc: string, members: ComboMemberInput[]) => void
   onRemoveCombo: (id: string) => void
-  /** 服务端插件组审核开关：true=发布需审核；false=直接上线。 */
+  /** 鏈嶅姟绔彃浠剁粍瀹℃牳寮€鍏筹細true=鍙戝竷闇€瀹℃牳锛沠alse=鐩存帴涓婄嚎銆?*/
   reviewEnabled: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -444,14 +435,13 @@ export function ComboView(props: {
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
   const [sel, setSel] = useState<Record<string, boolean>>({})
-  /** 每个已选插件的安装方式：auto=一键直接装 / manual=手动安装。 */
+  /** 姣忎釜宸查€夋彃浠剁殑瀹夎鏂瑰紡锛歛uto=涓€閿洿鎺ヨ / manual=鎵嬪姩瀹夎銆?*/
   const [modes, setModes] = useState<Record<string, 'auto' | 'manual'>>({})
   const [q, setQ] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [exp, setExp] = useState<Record<string, boolean>>({})
   const [delSelected, setDelSelected] = useState<Record<string, boolean>>({})
-  // 简介输入框引用：编辑已有组合时按内容校准行高（自动增高只在键入时触发，打开时也需恢复完整高度）。
-  const descRef = useRef<HTMLTextAreaElement | null>(null)
+  // 绠€浠嬭緭鍏ユ寮曠敤锛氱紪杈戝凡鏈夌粍鍚堟椂鎸夊唴瀹规牎鍑嗚楂橈紙鑷姩澧為珮鍙湪閿叆鏃惰Е鍙戯紝鎵撳紑鏃朵篃闇€鎭㈠瀹屾暣楂樺害锛夈€?  const descRef = useRef<HTMLTextAreaElement | null>(null)
   useEffect(() => {
     if (open) {
       const el = descRef.current
@@ -480,10 +470,7 @@ export function ComboView(props: {
         c.members.some((m) => m.pkg.toLowerCase().includes(topKw))),
   )
   const kw = q.trim().toLowerCase()
-  // 候选 = 插件库全部插件（优先，未安装也可选）+ 已安装的库外插件 + 已选但两者都不是的存量成员
-  // （库外未安装的旧组合成员：联邦/历史数据可能产生，补占位项保证编辑不丢项、可取消、保存校验一致）。
-  // 每项带作者与仓库地址（库中有则展示，可点击跳转）。
-  const pickable = [
+  // 鍊欓€?= 鎻掍欢搴撳叏閮ㄦ彃浠讹紙浼樺厛锛屾湭瀹夎涔熷彲閫夛級+ 宸插畨瑁呯殑搴撳鎻掍欢 + 宸查€変絾涓よ€呴兘涓嶆槸鐨勫瓨閲忔垚鍛?  // 锛堝簱澶栨湭瀹夎鐨勬棫缁勫悎鎴愬憳锛氳仈閭?鍘嗗彶鏁版嵁鍙兘浜х敓锛岃ˉ鍗犱綅椤逛繚璇佺紪杈戜笉涓㈤」銆佸彲鍙栨秷銆佷繚瀛樻牎楠屼竴鑷达級銆?  // 姣忛」甯︿綔鑰呬笌浠撳簱鍦板潃锛堝簱涓湁鍒欏睍绀猴紝鍙偣鍑昏烦杞級銆?  const pickable = [
     ...props.plugins.map((p) => ({
       id: p.id,
       name: p.name,
@@ -499,16 +486,13 @@ export function ComboView(props: {
       .filter((id) => sel[id] && !libIds.has(id) && !allInstalled.includes(id))
       .map((id) => ({ id, name: id, inLib: false, version: null, author: undefined, repoUrl: undefined })),
   ]
-  // 搜索：名称或作者
-  const filtered = pickable.filter((it) => !kw || it.name.toLowerCase().includes(kw) || (it.author ?? '').toLowerCase().includes(kw))
-  // 已安装优先：已装(0) → 库内未装(1) → 库外(2)。稳定排序，搜索词过滤后依旧保持该次序。
-  filtered.sort((a, b) => {
+  // 鎼滅储锛氬悕绉版垨浣滆€?  const filtered = pickable.filter((it) => !kw || it.name.toLowerCase().includes(kw) || (it.author ?? '').toLowerCase().includes(kw))
+  // 宸插畨瑁呬紭鍏堬細宸茶(0) 鈫?搴撳唴鏈(1) 鈫?搴撳(2)銆傜ǔ瀹氭帓搴忥紝鎼滅储璇嶈繃婊ゅ悗渚濇棫淇濇寔璇ユ搴忋€?  filtered.sort((a, b) => {
     const sa = a.inLib ? (a.version ? 0 : 1) : 2
     const sb = b.inLib ? (b.version ? 0 : 1) : 2
     return sa - sb
   })
-  // 渲染上限：库内 3000+ 条全渲染会卡；已选中的成员始终保留在可见列表（编辑不丢项）。
-  const VISIBLE_CAP = 150
+  // 娓叉煋涓婇檺锛氬簱鍐?3000+ 鏉″叏娓叉煋浼氬崱锛涘凡閫変腑鐨勬垚鍛樺缁堜繚鐣欏湪鍙鍒楄〃锛堢紪杈戜笉涓㈤」锛夈€?  const VISIBLE_CAP = 150
   const visible = [...filtered.slice(0, VISIBLE_CAP), ...filtered.slice(VISIBLE_CAP).filter((it) => sel[it.id])]
   const chosenCount = Object.values(sel).filter(Boolean).length
   const allChecked = visible.length > 0 && visible.every((it) => sel[it.id])
@@ -542,11 +526,11 @@ export function ComboView(props: {
   }
   const publish = () => {
     const chosen = Object.keys(sel).filter((id) => sel[id])
-    if (!name.trim()) { setErr('请填写组合名称'); return }
-    if (chosen.length === 0) { setErr('请至少勾选一个插件'); return }
+    if (!name.trim()) { setErr('璇峰～鍐欑粍鍚堝悕绉?); return }
+    if (chosen.length === 0) { setErr('璇疯嚦灏戝嬀閫変竴涓彃浠?); return }
     const missing = chosen.filter((id) => !libIds.has(id))
     if (missing.length > 0) {
-      setErr(`以下插件在库中没有，请先取消勾选再发布：${missing.join('、')}`)
+      setErr(`浠ヤ笅鎻掍欢鍦ㄥ簱涓病鏈夛紝璇峰厛鍙栨秷鍕鹃€夊啀鍙戝竷锛?{missing.join('銆?)}`)
       return
     }
     const members = chosen.map((pkg) => ({ pkg, install_mode: modes[pkg] === 'manual' ? 'manual' as const : 'auto' as const }))
@@ -554,41 +538,41 @@ export function ComboView(props: {
     else props.onAddCombo(name.trim(), desc.trim(), members)
     setOpen(false)
   }
-  /** 组合状态徽标：待审核 / 已发布 / 已下架。 */
+  /** 缁勫悎鐘舵€佸窘鏍囷細寰呭鏍?/ 宸插彂甯?/ 宸蹭笅鏋躲€?*/
   const statusBadge = (s: Combo['status']) =>
-    s === 'published' ? <span className="dshs-badge of">已发布</span>
-    : s === 'unpublished' ? <span className="dshs-badge ba">已下架</span>
-    : <span className="dshs-badge wa">待审核</span>
-  /** 成员徽标：手动安装成员带 ✋ 标记。 */
+    s === 'published' ? <span className="dshs-badge of">宸插彂甯?/span>
+    : s === 'unpublished' ? <span className="dshs-badge ba">宸蹭笅鏋?/span>
+    : <span className="dshs-badge wa">寰呭鏍?/span>
+  /** 鎴愬憳寰芥爣锛氭墜鍔ㄥ畨瑁呮垚鍛樺甫 鉁?鏍囪銆?*/
   const memberBadge = (m: Combo['members'][number]) => (
-    <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} key={m.pkg} title={m.install_mode === 'manual' ? '手动安装' : '一键安装'}>
-      {m.pkg}{m.install_mode === 'manual' ? ' ✋' : ''}
+    <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} key={m.pkg} title={m.install_mode === 'manual' ? '鎵嬪姩瀹夎' : '涓€閿畨瑁?}>
+      {m.pkg}{m.install_mode === 'manual' ? ' 鉁? : ''}
     </span>
   )
-  /** 组合卡片底部操作行（作者视角：订阅数可见 + 修改/删除；他人视角：订阅数 + 安装）。 */
+  /** 缁勫悎鍗＄墖搴曢儴鎿嶄綔琛岋紙浣滆€呰瑙掞細璁㈤槄鏁板彲瑙?+ 淇敼/鍒犻櫎锛涗粬浜鸿瑙掞細璁㈤槄鏁?+ 瀹夎锛夈€?*/
   const comboFoot = (c: Combo, isMine: boolean, sub: boolean) => (
     <div className="dshs-mrow" style={{ marginTop: 7 }}>
-      <span className="dshs-lk" title="全站订阅该组合的用户数">👥 {c.subscribers ?? 0} 订阅</span>
+      <span className="dshs-lk" title="鍏ㄧ珯璁㈤槄璇ョ粍鍚堢殑鐢ㄦ埛鏁?>馃懃 {c.subscribers ?? 0} 璁㈤槄</span>
       {isMine ? (
         <>
-          <span className="dshs-compat" style={{ marginLeft: 0 }}>🧩 {c.members.length} · 更新 {(c.updated_at || '').slice(0, 10)}</span>
-          <button className="dshs-abtn" onClick={() => openEdit(c)}>✏️ 修改</button>
-          <ConfirmDelete onConfirm={() => props.onRemoveCombo(c.id)} title="删除我的组合" />
+          <span className="dshs-compat" style={{ marginLeft: 0 }}>馃З {c.members.length} 路 鏇存柊 {(c.updated_at || '').slice(0, 10)}</span>
+          <button className="dshs-abtn" onClick={() => openEdit(c)}>鉁忥笍 淇敼</button>
+          <ConfirmDelete onConfirm={() => props.onRemoveCombo(c.id)} title="鍒犻櫎鎴戠殑缁勫悎" />
         </>
       ) : (
         <>
           {sub ? (
-            <button className="dshs-ibtn done" disabled>已订阅 ✓</button>
+            <button className="dshs-ibtn done" disabled>宸茶闃?鉁?/button>
           ) : props.installing['combo:' + c.name] ? (
-            <button className="dshs-ibtn" disabled>⏳ 下载中…</button>
+            <button className="dshs-ibtn" disabled>鈴?涓嬭浇涓€?/button>
           ) : (
-            <button className="dshs-ibtn" onClick={() => props.onInstallCombo(c.name)}>一键下载整组</button>
+            <button className="dshs-ibtn" onClick={() => props.onInstallCombo(c.name)}>涓€閿笅杞芥暣缁?/button>
           )}
         </>
       )}
     </div>
   )
-  /** 展开成员明细（安装方式 + 已装状态 + 单独下载）。 */
+  /** 灞曞紑鎴愬憳鏄庣粏锛堝畨瑁呮柟寮?+ 宸茶鐘舵€?+ 鍗曠嫭涓嬭浇锛夈€?*/
   const memberRows = (c: Combo) => (
     <div style={{ marginBottom: 7 }}>
       {c.members.map((m) => {
@@ -596,17 +580,17 @@ export function ComboView(props: {
         return (
           <div className="dshs-mem" key={m.pkg}>
             <span className="dshs-nm" style={{ fontWeight: 600 }}>{p?.name ?? m.pkg}</span>
-            <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '手动安装：需自行打开插件页面安装' : '一键安装'}>
-              {m.install_mode === 'manual' ? '✋ 手动' : '⚡ 自动'}
+            <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '鎵嬪姩瀹夎锛氶渶鑷鎵撳紑鎻掍欢椤甸潰瀹夎' : '涓€閿畨瑁?}>
+              {m.install_mode === 'manual' ? '鉁?鎵嬪姩' : '鈿?鑷姩'}
             </span>
-            {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
+            {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>馃懁 {p.author}</span> : null}
             {p?.repo_url ? (
-              <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" title={p.repo_url}>🔗 仓库</a>
+              <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" title={p.repo_url}>馃敆 浠撳簱</a>
             ) : null}
             {props.installed[m.pkg] ? (
-              <span className="dshs-compat">已安装 v{props.installed[m.pkg]}</span>
+              <span className="dshs-compat">宸插畨瑁?v{props.installed[m.pkg]}</span>
             ) : (
-              <button className="dshs-abtn" onClick={() => props.onInstallPlugin(m.pkg)}>下载</button>
+              <button className="dshs-abtn" onClick={() => props.onInstallPlugin(m.pkg)}>涓嬭浇</button>
             )}
           </div>
         )
@@ -616,18 +600,18 @@ export function ComboView(props: {
 
   return (
     <div>
-      {/* 我的组合：独立卡片框 */}
+      {/* 鎴戠殑缁勫悎锛氱嫭绔嬪崱鐗囨 */}
       <div className="dshs-grp">
         <div className="dshs-sec">
-          🗂 我的组合
-          <span>{props.loggedIn ? `${mine.length} 个` : '登录后显示'}</span>
+          馃梻 鎴戠殑缁勫悎
+          <span>{props.loggedIn ? `${mine.length} 涓猔 : '鐧诲綍鍚庢樉绀?}</span>
         </div>
-        <button className="dshs-mycombo" onClick={openForm}>＋ 创建并发布我的组合</button>
+        <button className="dshs-mycombo" onClick={openForm}>锛?鍒涘缓骞跺彂甯冩垜鐨勭粍鍚?/button>
         {loginHint ? (
           <div className="dshs-notif" style={{ borderLeftColor: 'var(--gold)' }}>
-            <div className="nt">请先登录：登录后可创建并发布组合</div>
+            <div className="nt">璇峰厛鐧诲綍锛氱櫥褰曞悗鍙垱寤哄苟鍙戝竷缁勫悎</div>
             <div className="na">
-              <button className="dshs-abtn" onClick={() => { setLoginHint(false); props.onLogin() }}>去登录 →</button>
+              <button className="dshs-abtn" onClick={() => { setLoginHint(false); props.onLogin() }}>鍘荤櫥褰?鈫?/button>
             </div>
           </div>
         ) : null}
@@ -636,7 +620,7 @@ export function ComboView(props: {
             <>
               <BatchDeleteBar
                 count={selectedMine.length}
-                itemName="我的组合"
+                itemName="鎴戠殑缁勫悎"
                 onDelete={() => {
                   selectedMine.forEach((id) => props.onRemoveCombo(id))
                   setDelSelected({})
@@ -653,7 +637,7 @@ export function ComboView(props: {
                         <div className="dshs-l1">
                           <span className="dshs-nm">{c.name}</span>
                           {statusBadge(c.status)}
-                          <span className="dshs-compat">by 我</span>
+                          <span className="dshs-compat">by 鎴?/span>
                         </div>
                         <Desc text={c.description} style={{ margin: '4px 0 6px' }} />
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -661,7 +645,7 @@ export function ComboView(props: {
                         </div>
                         {isExp ? memberRows(c) : null}
                         <button className="dshs-abtn" onClick={() => setExp({ ...exp, ['mine:' + c.id]: !isExp })}>
-                          {isExp ? '收起成员 ▴' : '查看成员 ▾'}
+                          {isExp ? '鏀惰捣鎴愬憳 鈻? : '鏌ョ湅鎴愬憳 鈻?}
                         </button>
                         {comboFoot(c, true, false)}
                       </div>
@@ -672,31 +656,31 @@ export function ComboView(props: {
             </>
           ) : (
             <div className="dshs-empty" style={{ padding: 14 }}>
-              {"还没有自己的组合，点上方按钮创建第一个组合"}
+              {"杩樻病鏈夎嚜宸辩殑缁勫悎锛岀偣涓婃柟鎸夐挳鍒涘缓绗竴涓粍鍚?}
               <br />
-              <span style={{ fontSize: 11, opacity: 0.8 }}>若已发布却看不到：请确认当前连接的服务器与发布时一致，并在「☁️ 云端」点「从云端刷新」（组合数据按服务器下发，状态为「待审核/已发布」都会显示在你这里）</span>
+              <span style={{ fontSize: 11, opacity: 0.8 }}>鑻ュ凡鍙戝竷鍗寸湅涓嶅埌锛氳纭褰撳墠杩炴帴鐨勬湇鍔″櫒涓庡彂甯冩椂涓€鑷达紝骞跺湪銆屸榿锔?浜戠銆嶇偣銆屼粠浜戠鍒锋柊銆嶏紙缁勫悎鏁版嵁鎸夋湇鍔″櫒涓嬪彂锛岀姸鎬佷负銆屽緟瀹℃牳/宸插彂甯冦€嶉兘浼氭樉绀哄湪浣犺繖閲岋級</span>
             </div>
           )
         ) : (
-          <div className="dshs-empty" style={{ padding: 14 }}>登录 GitHub 后，这里会优先显示你创建的组合</div>
+          <div className="dshs-empty" style={{ padding: 14 }}>鐧诲綍 GitHub 鍚庯紝杩欓噷浼氫紭鍏堟樉绀轰綘鍒涘缓鐨勭粍鍚?/div>
         )}
       </div>
       {open ? (
         <div className="dshs-modal" onClick={() => setOpen(false)}>
           <div className="dshs-modal-card big" onClick={(e) => e.stopPropagation()}>
-            <div className="t">{editId ? '✏️ 修改组合' : '🗂 创建并发布组合'}<button onClick={() => setOpen(false)}>✕</button></div>
-            {/* 免责声明：每次新建/编辑都展示(双语社会主义核心价值观) */}
+            <div className="t">{editId ? '鉁忥笍 淇敼缁勫悎' : '馃梻 鍒涘缓骞跺彂甯冪粍鍚?}<button onClick={() => setOpen(false)}>鉁?/button></div>
+            {/* 鍏嶈矗澹版槑锛氭瘡娆℃柊寤?缂栬緫閮藉睍绀?鍙岃绀句細涓讳箟鏍稿績浠峰€艰) */}
             <div className="dshs-disclaim">
-              <div className="dshs-disclaim-t">⚠️ 免责声明 · Disclaimer</div>
-              <div className="dshs-disclaim-b">请勿发布违反法律法规的内容，由此产生的一切后果由发布者自行承担。<br />Please do not publish anything against the law. You alone are responsible for all consequences.</div>
-              <div className="dshs-disclaim-v">富强 民主 文明 和谐 · 自由 平等 公正 法治 · 爱国 敬业 诚信 友善<br /><span>Prosperity, Democracy, Civility, Harmony · Freedom, Equality, Justice, Rule of Law · Patriotism, Dedication, Integrity, Friendship</span></div>
+              <div className="dshs-disclaim-t">鈿狅笍 鍏嶈矗澹版槑 路 Disclaimer</div>
+              <div className="dshs-disclaim-b">璇峰嬁鍙戝竷杩濆弽娉曞緥娉曡鐨勫唴瀹癸紝鐢辨浜х敓鐨勪竴鍒囧悗鏋滅敱鍙戝竷鑰呰嚜琛屾壙鎷呫€?br />Please do not publish anything against the law. You alone are responsible for all consequences.</div>
+              <div className="dshs-disclaim-v">瀵屽己 姘戜富 鏂囨槑 鍜岃皭 路 鑷敱 骞崇瓑 鍏 娉曟不 路 鐖卞浗 鏁笟 璇氫俊 鍙嬪杽<br /><span>Prosperity, Democracy, Civility, Harmony 路 Freedom, Equality, Justice, Rule of Law 路 Patriotism, Dedication, Integrity, Friendship</span></div>
             </div>
-            {/* 审核状态提示：新建/编辑保存均显示 */}
+            {/* 瀹℃牳鐘舵€佹彁绀猴細鏂板缓/缂栬緫淇濆瓨鍧囨樉绀?*/}
             {(() => {
               if (!props.reviewEnabled) {
                 return (
                   <div className="dshs-notif" style={{ borderLeftColor: 'var(--brand2)' }}>
-                    <div className="nt">⚡ 插件组审核已关闭：发布后立即实时上线，无需等待。</div>
+                    <div className="nt">鈿?鎻掍欢缁勫鏍稿凡鍏抽棴锛氬彂甯冨悗绔嬪嵆瀹炴椂涓婄嚎锛屾棤闇€绛夊緟銆?/div>
                   </div>
                 )
               }
@@ -704,31 +688,31 @@ export function ComboView(props: {
               if (editing && editing.status === 'published') {
                 return (
                   <div className="dshs-notif" style={{ borderLeftColor: 'var(--brand2)' }}>
-                    <div className="nt">✅ 你的组合已通过审核：保存修改后直接更新上线，无需重新审核。</div>
+                    <div className="nt">鉁?浣犵殑缁勫悎宸查€氳繃瀹℃牳锛氫繚瀛樹慨鏀瑰悗鐩存帴鏇存柊涓婄嚎锛屾棤闇€閲嶆柊瀹℃牳銆?/div>
                   </div>
                 )
               }
               return (
                 <div className="dshs-notif" style={{ borderLeftColor: 'var(--gold)' }}>
-                  <div className="nt">🕐 插件组需要管理员审核，发布后请耐心等待；审核结果（通过/下架/删除）将通过<strong>私人公告</strong>通知你，请留意铃铛红点。</div>
+                  <div className="nt">馃晲 鎻掍欢缁勯渶瑕佺鐞嗗憳瀹℃牳锛屽彂甯冨悗璇疯€愬績绛夊緟锛涘鏍哥粨鏋滐紙閫氳繃/涓嬫灦/鍒犻櫎锛夊皢閫氳繃<strong>绉佷汉鍏憡</strong>閫氱煡浣狅紝璇风暀鎰忛搩閾涚孩鐐广€?/div>
                 </div>
               )
             })()}
             <div className="c">
               <div className="dshs-frow">
-                <input className="dshs-input" placeholder="组合名称（≤30字）" value={name} onChange={(e) => setName(e.target.value)} />
+                <input className="dshs-input" placeholder="缁勫悎鍚嶇О锛堚墹30瀛楋級" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div className="dshs-frow" style={{ alignItems: 'flex-start' }}>
                 <textarea
                   ref={descRef}
                   className="dshs-input dshs-desc"
-                  placeholder="一句话简介（≤200字），可换行"
+                  placeholder="涓€鍙ヨ瘽绠€浠嬶紙鈮?00瀛楋級锛屽彲鎹㈣"
                   maxLength={200}
                   rows={2}
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
                   onInput={(e) => {
-                    // 随内容自动增高（超过弹窗高度时整体滚动，不再只有一行、检查不便）
+                    // 闅忓唴瀹硅嚜鍔ㄥ楂橈紙瓒呰繃寮圭獥楂樺害鏃舵暣浣撴粴鍔紝涓嶅啀鍙湁涓€琛屻€佹鏌ヤ笉渚匡級
                     const el = e.target as HTMLTextAreaElement
                     el.style.height = 'auto'
                     el.style.height = el.scrollHeight + 'px'
@@ -736,17 +720,16 @@ export function ComboView(props: {
                 />
               </div>
               <div className="dshs-sec" style={{ marginTop: 4 }}>
-                🧩 选择组合成员（插件库优先）
-                <span>{props.plugins.length} 个库内插件</span>
+                馃З 閫夋嫨缁勫悎鎴愬憳锛堟彃浠跺簱浼樺厛锛?                <span>{props.plugins.length} 涓簱鍐呮彃浠?/span>
               </div>
               <div className="dshs-frow">
-                <input className="dshs-input" placeholder="搜索插件名 / 作者…" value={q} onChange={(e) => setQ(e.target.value)} />
+                <input className="dshs-input" placeholder="鎼滅储鎻掍欢鍚?/ 浣滆€呪€? value={q} onChange={(e) => setQ(e.target.value)} />
               </div>
               <div className="dshs-mrow" style={{ marginBottom: 6 }}>
-                <button className="dshs-abtn" onClick={toggleAll}>{allChecked ? '取消全选' : '☑ 一键全选'}</button>
-                <span className="dshs-compat" style={{ marginLeft: 0 }}>已选 {chosenCount} / 库内 {props.plugins.length}</span>
+                <button className="dshs-abtn" onClick={toggleAll}>{allChecked ? '鍙栨秷鍏ㄩ€? : '鈽?涓€閿叏閫?}</button>
+                <span className="dshs-compat" style={{ marginLeft: 0 }}>宸查€?{chosenCount} / 搴撳唴 {props.plugins.length}</span>
               </div>
-              <div className="dshs-subnote" style={{ marginBottom: 6 }}>插件库中的插件优先展示（未安装也可选），带 👤 作者与 🔗 仓库链接；安装方式：⚡ 自动 = 一键下载直接安装；✋ 手动 = 组内其他插件直接装，该插件打开页面由你自行安装。</div>
+              <div className="dshs-subnote" style={{ marginBottom: 6 }}>鎻掍欢搴撲腑鐨勬彃浠朵紭鍏堝睍绀猴紙鏈畨瑁呬篃鍙€夛級锛屽甫 馃懁 浣滆€呬笌 馃敆 浠撳簱閾炬帴锛涘畨瑁呮柟寮忥細鈿?鑷姩 = 涓€閿笅杞界洿鎺ュ畨瑁咃紱鉁?鎵嬪姩 = 缁勫唴鍏朵粬鎻掍欢鐩存帴瑁咃紝璇ユ彃浠舵墦寮€椤甸潰鐢变綘鑷瀹夎銆?/div>
               {visible.length ? (
                 visible.map((it) => {
                   const on = !!sel[it.id]
@@ -761,26 +744,26 @@ export function ComboView(props: {
                     >
                       <input type="checkbox" checked={on} onChange={() => toggle(it.id)} />
                       <span className="dshs-nm" style={{ fontWeight: 600 }}>{it.name}</span>
-                      <span className="dshs-compat" style={{ marginLeft: 0 }}>{it.version ? `v${it.version}` : '未安装'}</span>
-                      {it.inLib ? <span className="dshs-lib ok">在库 ✓</span> : <span className="dshs-lib warn">库中没有 ⚠</span>}
-                      {it.inLib && it.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {it.author}</span> : null}
+                      <span className="dshs-compat" style={{ marginLeft: 0 }}>{it.version ? `v${it.version}` : '鏈畨瑁?}</span>
+                      {it.inLib ? <span className="dshs-lib ok">鍦ㄥ簱 鉁?/span> : <span className="dshs-lib warn">搴撲腑娌℃湁 鈿?/span>}
+                      {it.inLib && it.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>馃懁 {it.author}</span> : null}
                       {it.inLib && it.repoUrl ? (
-                        <a className="dshs-lk" href={it.repoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={it.repoUrl}>🔗 仓库</a>
+                        <a className="dshs-lk" href={it.repoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={it.repoUrl}>馃敆 浠撳簱</a>
                       ) : null}
                       {on ? (
                         <span className="dshs-mode" onClick={(e) => e.stopPropagation()}>
-                          <button className={'dshs-mode-btn' + (mode === 'auto' ? ' on' : '')} onClick={() => setModes({ ...modes, [it.id]: 'auto' })}>⚡ 自动</button>
-                          <button className={'dshs-mode-btn' + (mode === 'manual' ? ' on' : '')} onClick={() => setModes({ ...modes, [it.id]: 'manual' })}>✋ 手动</button>
+                          <button className={'dshs-mode-btn' + (mode === 'auto' ? ' on' : '')} onClick={() => setModes({ ...modes, [it.id]: 'auto' })}>鈿?鑷姩</button>
+                          <button className={'dshs-mode-btn' + (mode === 'manual' ? ' on' : '')} onClick={() => setModes({ ...modes, [it.id]: 'manual' })}>鉁?鎵嬪姩</button>
                         </span>
                       ) : null}
                     </div>
                   )
                 })
               ) : (
-                <div className="dshs-empty">{kw ? '没有匹配的插件（试试搜作者名）' : '插件库为空'}</div>
+                <div className="dshs-empty">{kw ? '娌℃湁鍖归厤鐨勬彃浠讹紙璇曡瘯鎼滀綔鑰呭悕锛? : '鎻掍欢搴撲负绌?}</div>
               )}
               {filtered.length > VISIBLE_CAP ? (
-                <div className="dshs-subnote" style={{ marginTop: 6 }}>仅显示前 {VISIBLE_CAP} 条（已选中的成员不受此限），用搜索精确定位。</div>
+                <div className="dshs-subnote" style={{ marginTop: 6 }}>浠呮樉绀哄墠 {VISIBLE_CAP} 鏉★紙宸查€変腑鐨勬垚鍛樹笉鍙楁闄愶級锛岀敤鎼滅储绮剧‘瀹氫綅銆?/div>
               ) : null}
             </div>
             {err ? (
@@ -788,17 +771,17 @@ export function ComboView(props: {
                 <div className="nt">{err}</div>
               </div>
             ) : null}
-            {/* 底部固定操作区：插件列表可滚动,发布按钮始终可见 */}
+            {/* 搴曢儴鍥哄畾鎿嶄綔鍖猴細鎻掍欢鍒楄〃鍙粴鍔?鍙戝竷鎸夐挳濮嬬粓鍙 */}
             <div className="dshs-modal-foot">
-              <span className="dshs-compat" style={{ marginLeft: 0 }}>{editId ? '保存后组合更新（状态保留）' : '发布后进入管理端审核'}</span>
-              <button className="dshs-ibtn" onClick={publish}>{editId ? '保存修改' : '发布组合'}</button>
+              <span className="dshs-compat" style={{ marginLeft: 0 }}>{editId ? '淇濆瓨鍚庣粍鍚堟洿鏂帮紙鐘舵€佷繚鐣欙級' : '鍙戝竷鍚庤繘鍏ョ鐞嗙瀹℃牳'}</span>
+              <button className="dshs-ibtn" onClick={publish}>{editId ? '淇濆瓨淇敼' : '鍙戝竷缁勫悎'}</button>
             </div>
           </div>
         </div>
       ) : null}
       <div className="dshs-sec" style={{ marginTop: 14 }}>
-        🔥 推荐组合
-        <span>{recommended.length} 个</span>
+        馃敟 鎺ㄨ崘缁勫悎
+        <span>{recommended.length} 涓?/span>
       </div>
       {recommended.map((c) => {
         const sub = !!props.subscriptions[c.name]
@@ -807,7 +790,7 @@ export function ComboView(props: {
           <div className="dshs-vcard" key={c.id}>
             <div className="dshs-l1">
               <span className="dshs-nm">{c.name}</span>
-              {sub ? <span className="dshs-pill primary">已订阅</span> : null}
+              {sub ? <span className="dshs-pill primary">宸茶闃?/span> : null}
               {statusBadge(c.status)}
               <span className="dshs-compat">by {c.author}</span>
             </div>
@@ -817,11 +800,11 @@ export function ComboView(props: {
             </div>
             {isExp ? memberRows(c) : null}
             <button className="dshs-abtn" onClick={() => setExp({ ...exp, [c.name]: !isExp })}>
-              {isExp ? '收起成员 ▴' : '查看成员 ▾'}
+              {isExp ? '鏀惰捣鎴愬憳 鈻? : '鏌ョ湅鎴愬憳 鈻?}
             </button>
             {comboFoot(c, false, sub)}
             {!sub ? (
-              <div className="dshs-subnote">💡 点开成员可挑着下载（=单独安装，不订阅该组）；一键下载整组 = 订阅，作者新增插件将提醒你。✋ 手动安装的成员需自行打开插件页面安装。</div>
+              <div className="dshs-subnote">馃挕 鐐瑰紑鎴愬憳鍙寫鐫€涓嬭浇锛?鍗曠嫭瀹夎锛屼笉璁㈤槄璇ョ粍锛夛紱涓€閿笅杞芥暣缁?= 璁㈤槄锛屼綔鑰呮柊澧炴彃浠跺皢鎻愰啋浣犮€傗湅 鎵嬪姩瀹夎鐨勬垚鍛橀渶鑷鎵撳紑鎻掍欢椤甸潰瀹夎銆?/div>
             ) : null}
           </div>
         )
@@ -830,7 +813,7 @@ export function ComboView(props: {
   )
 }
 
-/** 发布插件（上报入库）：按钮 → 大弹窗；库内搜索查重；仅登录用户可提交。 */
+/** 鍙戝竷鎻掍欢锛堜笂鎶ュ叆搴擄級锛氭寜閽?鈫?澶у脊绐楋紱搴撳唴鎼滅储鏌ラ噸锛涗粎鐧诲綍鐢ㄦ埛鍙彁浜ゃ€?*/
 export function PublishPluginView(props: {
   loggedIn: boolean
   plugins: Plugin[]
@@ -847,55 +830,55 @@ export function PublishPluginView(props: {
   const hf = (f?: string | null) => (f ?? '').toLowerCase().includes(kq)
   const found = kq ? props.plugins.filter((p) => hf(p.name) || hf(p.id) || hf(p.author) || hf(p.repo) || hf(p.install)).slice(0, 5) : []
   const submit = () => {
-    if (!pkg.trim()) { setMsg({ ok: false, text: '请填写包名 / 安装地址' }); return }
-    setMsg({ ok: null, text: '上报中…' })
+    if (!pkg.trim()) { setMsg({ ok: false, text: '璇峰～鍐欏寘鍚?/ 瀹夎鍦板潃' }); return }
+    setMsg({ ok: null, text: '涓婃姤涓€? })
     void props.onReport(pkg.trim(), repoUrl.trim() || null, version.trim()).then((r) => setMsg({ ok: r.ok, text: r.message }))
   }
   return (
     <div className="dshs-modal" onClick={props.onClose}>
       <div className="dshs-modal-card big" onClick={(e) => e.stopPropagation()}>
-        <div className="t">📤 发布插件（上报入库）<button onClick={props.onClose}>✕</button></div>
+        <div className="t">馃摛 鍙戝竷鎻掍欢锛堜笂鎶ュ叆搴擄級<button onClick={props.onClose}>鉁?/button></div>
         {props.loggedIn ? (
           <>
             <div className="c">
-              <div className="dshs-subnote" style={{ marginBottom: 8 }}>你的插件将进入管理端「待确认」清单，管理员快审收录后出现在插件库。</div>
+              <div className="dshs-subnote" style={{ marginBottom: 8 }}>浣犵殑鎻掍欢灏嗚繘鍏ョ鐞嗙銆屽緟纭銆嶆竻鍗曪紝绠＄悊鍛樺揩瀹℃敹褰曞悗鍑虹幇鍦ㄦ彃浠跺簱銆?/div>
             <div className="dshs-frow">
-              <input className="dshs-input" placeholder="包名 / 安装地址（如 dsh-xxx 或 github:owner/repo）" value={pkg} onChange={(e) => setPkg(e.target.value)} />
+              <input className="dshs-input" placeholder="鍖呭悕 / 瀹夎鍦板潃锛堝 dsh-xxx 鎴?github:owner/repo锛? value={pkg} onChange={(e) => setPkg(e.target.value)} />
             </div>
             <div className="dshs-frow">
-              <input className="dshs-input" placeholder="仓库地址（可选，如 https://github.com/owner/repo）" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
+              <input className="dshs-input" placeholder="浠撳簱鍦板潃锛堝彲閫夛紝濡?https://github.com/owner/repo锛? value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
             </div>
             <div className="dshs-frow">
-              <input className="dshs-input" placeholder="版本号（可选，如 0.1.0）" value={version} onChange={(e) => setVersion(e.target.value)} />
+              <input className="dshs-input" placeholder="鐗堟湰鍙凤紙鍙€夛紝濡?0.1.0锛? value={version} onChange={(e) => setVersion(e.target.value)} />
             </div>
-            <div className="dshs-sec" style={{ marginTop: 6 }}>🔍 先在库内搜一下，避免重复上报</div>
+            <div className="dshs-sec" style={{ marginTop: 6 }}>馃攳 鍏堝湪搴撳唴鎼滀竴涓嬶紝閬垮厤閲嶅涓婃姤</div>
             <div className="dshs-frow">
-              <input className="dshs-input" placeholder="搜索插件库（名称/作者/仓库）…" value={libQ} onChange={(e) => setLibQ(e.target.value)} />
+              <input className="dshs-input" placeholder="鎼滅储鎻掍欢搴擄紙鍚嶇О/浣滆€?浠撳簱锛夆€? value={libQ} onChange={(e) => setLibQ(e.target.value)} />
             </div>
             {found.map((p) => (
               <div className="dshs-mem" key={p.id}>
                 <span className="dshs-nm" style={{ fontWeight: 600 }}>{p.name}</span>
-                <span className="dshs-lib ok">已在库中 ✓</span>
-                <span className="dshs-compat">by {p.author ?? '—'}</span>
+                <span className="dshs-lib ok">宸插湪搴撲腑 鉁?/span>
+                <span className="dshs-compat">by {p.author ?? '鈥?}</span>
               </div>
             ))}
-            {kq && found.length === 0 ? <div className="dshs-subnote">库内未找到「{libQ}」，可以提交上报</div> : null}
+            {kq && found.length === 0 ? <div className="dshs-subnote">搴撳唴鏈壘鍒般€寋libQ}銆嶏紝鍙互鎻愪氦涓婃姤</div> : null}
             {msg ? (
               <div className="dshs-notif" style={{ borderLeftColor: msg.ok === false ? 'var(--danger)' : msg.ok === true ? 'var(--brand2)' : '#3b9eff' }}>
                 <div className="nt">{msg.text}</div>
               </div>
             ) : null}
             </div>
-            {/* 底部固定操作区：内容可滚动,提交按钮始终可见 */}
+            {/* 搴曢儴鍥哄畾鎿嶄綔鍖猴細鍐呭鍙粴鍔?鎻愪氦鎸夐挳濮嬬粓鍙 */}
             <div className="dshs-modal-foot">
-              <button className="dshs-ibtn" onClick={submit}>提交上报</button>
+              <button className="dshs-ibtn" onClick={submit}>鎻愪氦涓婃姤</button>
             </div>
           </>
         ) : (
           <div className="c">
-            <div className="dshs-empty">请先登录：登录后可发布插件（上报入库）</div>
+            <div className="dshs-empty">璇峰厛鐧诲綍锛氱櫥褰曞悗鍙彂甯冩彃浠讹紙涓婃姤鍏ュ簱锛?/div>
             <div className="dshs-mrow">
-              <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => { props.onClose(); props.onLogin() }}>去登录 →</button>
+              <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => { props.onClose(); props.onLogin() }}>鍘荤櫥褰?鈫?/button>
             </div>
           </div>
         )}
@@ -904,7 +887,7 @@ export function PublishPluginView(props: {
   )
 }
 
-/** 订阅页：云端订阅组（默认折叠）+ 已订阅组合；成员更新/下载/退订。 */
+/** 璁㈤槄椤碉細浜戠璁㈤槄缁勶紙榛樿鎶樺彔锛? 宸茶闃呯粍鍚堬紱鎴愬憳鏇存柊/涓嬭浇/閫€璁€?*/
 export function SubscribeView(props: {
   combos: Combo[]
   subscriptions: Record<string, boolean>
@@ -919,7 +902,7 @@ export function SubscribeView(props: {
   onPushCloud: () => Promise<CloudList>
   onRefreshCloud: () => Promise<CloudList>
   onRestoreSubs: (combos: string[]) => void
-  /** 手动挑选上传（云端已有 + 勾选新增）。 */
+  /** 鎵嬪姩鎸戦€変笂浼狅紙浜戠宸叉湁 + 鍕鹃€夋柊澧烇級銆?*/
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
 }) {
   const [q, setQ] = useState('')
@@ -927,12 +910,12 @@ export function SubscribeView(props: {
   const [subOpen, setSubOpen] = useState<Record<string, boolean>>({})
   const [subSelected, setSubSelected] = useState<Record<string, boolean>>({})
   const [csearch, setCsearch] = useState('')
-  // 云端组合选择：组（订阅）与组内插件（安装）分开勾选，跨组同名插件按 pkg 天然去重
+  // 浜戠缁勫悎閫夋嫨锛氱粍锛堣闃咃級涓庣粍鍐呮彃浠讹紙瀹夎锛夊垎寮€鍕鹃€夛紝璺ㄧ粍鍚屽悕鎻掍欢鎸?pkg 澶╃劧鍘婚噸
   const [comboGroupsSel, setComboGroupsSel] = useState<Record<string, boolean>>({})
   const [comboPlugsSel, setComboPlugsSel] = useState<Record<string, boolean>>({})
-  // 手动选择上传：本地已订阅但云端没有的组合
-  const [comboUpSel, setComboUpSel] = useState<Record<string, boolean>>({})
   const [cloudMsg, setCloudMsg] = useState<string | null>(null)
+  // 鎵嬪姩閫夋嫨涓婁紶锛氭湰鍦板凡璁㈤槄浣嗕簯绔病鏈夌殑缁勫悎
+  const [comboUpSel, setComboUpSel] = useState<Record<string, boolean>>({})
   const kw = q.trim().toLowerCase()
   const groups = props.combos.filter((c) => props.subscriptions[c.name])
   const filtered = groups.filter((c) => {
@@ -943,57 +926,55 @@ export function SubscribeView(props: {
   const selectedGroups = filtered.filter((c) => subSelected[c.name]).map((c) => c.name)
   const cq = csearch.trim().toLowerCase()
   const cloudCombos = props.cloud.combos.filter((c) => !cq || c.toLowerCase().includes(cq))
-  // 待上传组合：本地已订阅但云端清单里没有的
+  // 寰呬笂浼犵粍鍚堬細鏈湴宸茶闃呬絾浜戠娓呭崟閲屾病鏈夌殑
   const cloudComboSet = new Set(props.cloud.combos)
   const pendingCombos = Object.keys(props.subscriptions).filter((n) => props.subscriptions[n] && !cloudComboSet.has(n))
-  // 恢复所选：订阅选中的组 + 安装单独勾选的插件（跨组去重；已装自动跳过）
-  const restoreSelectedCloud = () => {
+  // 鎭㈠鎵€閫夛細璁㈤槄閫変腑鐨勭粍 + 瀹夎鍗曠嫭鍕鹃€夌殑鎻掍欢锛堣法缁勫幓閲嶏紱宸茶鑷姩璺宠繃锛?  const restoreSelectedCloud = () => {
     const gs = Object.keys(comboGroupsSel).filter((n) => comboGroupsSel[n])
     const ps = Object.keys(comboPlugsSel).filter((p) => comboPlugsSel[p])
     if (gs.length) props.onRestoreSubs(gs)
     for (const p of ps) if (!props.installed[p]) props.onInstallPlugin(p)
-    setCloudMsg(`已开始恢复：${gs.length} 个组订阅 + ${ps.length} 个插件`)
+    setCloudMsg(`宸插紑濮嬫仮澶嶏細${gs.length} 涓粍璁㈤槄 + ${ps.length} 涓彃浠禶)
   }
-  // 全部恢复：订阅全部云端组合并安装组内成员（bridge 层对已装成员自动去重）
-  const restoreAllCloud = () => {
+  // 鍏ㄩ儴鎭㈠锛氳闃呭叏閮ㄤ簯绔粍鍚堝苟瀹夎缁勫唴鎴愬憳锛坆ridge 灞傚宸茶鎴愬憳鑷姩鍘婚噸锛?  const restoreAllCloud = () => {
     const ok = window.confirm(
-      '⚠️ 一键全部恢复将订阅云端全部组合，并安装所有组内插件（跨组重复插件会自动跳过）。\n\n' +
-        '建议优先用「恢复所选」按需勾选组/插件。',
+      '鈿狅笍 涓€閿叏閮ㄦ仮澶嶅皢璁㈤槄浜戠鍏ㄩ儴缁勫悎锛屽苟瀹夎鎵€鏈夌粍鍐呮彃浠讹紙璺ㄧ粍閲嶅鎻掍欢浼氳嚜鍔ㄨ烦杩囷級銆俓n\n' +
+        '寤鸿浼樺厛鐢ㄣ€屾仮澶嶆墍閫夈€嶆寜闇€鍕鹃€夌粍/鎻掍欢銆?,
     )
     if (!ok) return
     props.onRestoreSubs(props.cloud.combos)
-    setCloudMsg(`已开始恢复 ${props.cloud.combos.length} 个云端组合`)
+    setCloudMsg(`宸插紑濮嬫仮澶?${props.cloud.combos.length} 涓簯绔粍鍚坄)
   }
 
   return (
     <div>
-      {/* 云端组合：折叠卡片；组嵌套插件，支持跨组勾选 */}
+      {/* 浜戠缁勫悎锛氭姌鍙犲崱鐗囷紱缁勫祵濂楁彃浠讹紝鏀寔璺ㄧ粍鍕鹃€?*/}
       <div className="dshs-cloudcard" style={{ marginTop: 10 }}>
         <div className="dshs-cloudcard-h" onClick={() => setCloudOpen(!cloudOpen)}>
-          <span className="dshs-nm" style={{ fontWeight: 600 }}>☁️ 云端组合</span>
-          <span className="dshs-compat">{props.cloud.combos.length} 个已保存</span>
-          <span className="dshs-cloudcard-arrow">{cloudOpen ? '收起 ▴' : '展开 ▾'}</span>
+          <span className="dshs-nm" style={{ fontWeight: 600 }}>鈽侊笍 浜戠缁勫悎</span>
+          <span className="dshs-compat">{props.cloud.combos.length} 涓凡淇濆瓨</span>
+          <span className="dshs-cloudcard-arrow">{cloudOpen ? '鏀惰捣 鈻? : '灞曞紑 鈻?}</span>
         </div>
         {cloudOpen ? (
           <div className="dshs-cloudcard-body">
-            <div className="dshs-subnote">云端组合按<b>组</b>展示：勾选组 = 订阅该组；展开后可单独勾选组内<b>插件</b>跨组安装；重复插件自动跳过。</div>
+            <div className="dshs-subnote">浜戠缁勫悎鎸?b>缁?/b>灞曠ず锛氬嬀閫夌粍 = 璁㈤槄璇ョ粍锛涘睍寮€鍚庡彲鍗曠嫭鍕鹃€夌粍鍐?b>鎻掍欢</b>璺ㄧ粍瀹夎锛涢噸澶嶆彃浠惰嚜鍔ㄨ烦杩囥€?/div>
             <div className="dshs-actions" style={{ marginTop: 6 }}>
-              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在上传本地组合到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>☁ 上传本地到云端</button>
-              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>↻ 从云端刷新</button>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('姝ｅ湪涓婁紶鏈湴缁勫悎鍒颁簯绔€?); void props.onPushCloud().then((c) => setCloudMsg(`宸蹭笂浼狅細鎻掍欢 ${c.plugins.length} 路 缁勫悎 ${c.combos.length}`)) }}>鈽?涓婁紶鏈湴鍒颁簯绔?/button>
+              <button className="dshs-abtn" onClick={() => { setCloudMsg('姝ｅ湪浠庝簯绔埛鏂扳€?); void props.onRefreshCloud().then((c) => setCloudMsg(`浜戠娓呭崟锛氭彃浠?${c.plugins.length} 路 缁勫悎 ${c.combos.length}`)) }}>鈫?浠庝簯绔埛鏂?/button>
               {props.installing['restore'] ? (
-                <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
+                <button className="dshs-abtn pri" disabled>鈴?鎭㈠涓€?/button>
               ) : (
-                <button className="dshs-abtn pri" onClick={restoreSelectedCloud}>恢复所选</button>
+                <button className="dshs-abtn pri" onClick={restoreSelectedCloud}>鎭㈠鎵€閫?/button>
               )}
               {props.installing['restore'] ? (
-                <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
+                <button className="dshs-abtn" disabled>鈴?鎭㈠涓€?/button>
               ) : (
-                <button className="dshs-abtn" onClick={restoreAllCloud}>⚡ 全部恢复（带提醒）</button>
+                <button className="dshs-abtn" onClick={restoreAllCloud}>鈿?鍏ㄩ儴鎭㈠锛堝甫鎻愰啋锛?/button>
               )}
             </div>
             {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
             <div className="dshs-frow" style={{ marginTop: 8 }}>
-              <input className="dshs-input" placeholder="搜索云端组合…" value={csearch} onChange={(e) => setCsearch(e.target.value)} />
+              <input className="dshs-input" placeholder="鎼滅储浜戠缁勫悎鈥? value={csearch} onChange={(e) => setCsearch(e.target.value)} />
             </div>
             <div className="dshs-cloud-scroll">
               {cloudCombos.length ? cloudCombos.map((name) => {
@@ -1004,9 +985,9 @@ export function SubscribeView(props: {
                   <div className="dshs-pick-sub" key={name}>
                     <div className="dshs-pick" onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setComboGroupsSel({ ...comboGroupsSel, [name]: !comboGroupsSel[name] }) }}>
                       <input type="checkbox" checked={!!comboGroupsSel[name]} onChange={() => setComboGroupsSel({ ...comboGroupsSel, [name]: !comboGroupsSel[name] })} />
-                      <span className="dshs-nm" style={{ fontWeight: 600 }}>🗂 {name}</span>
-                      <span className="dshs-compat" style={{ marginLeft: 0 }}>{members.length} 个插件</span>
-                      {sub ? <span className="dshs-pill primary">已订阅</span> : <span className="dshs-pill off">未订阅</span>}
+                      <span className="dshs-nm" style={{ fontWeight: 600 }}>馃梻 {name}</span>
+                      <span className="dshs-compat" style={{ marginLeft: 0 }}>{members.length} 涓彃浠?/span>
+                      {sub ? <span className="dshs-pill primary">宸茶闃?/span> : <span className="dshs-pill off">鏈闃?/span>}
                     </div>
                     {members.length ? (
                       <div className="dshs-pick-sub-in">
@@ -1015,13 +996,13 @@ export function SubscribeView(props: {
                           return (
                             <div className="dshs-pick" key={m.pkg} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setComboPlugsSel({ ...comboPlugsSel, [m.pkg]: !comboPlugsSel[m.pkg] }) }}>
                               <input type="checkbox" checked={!!comboPlugsSel[m.pkg]} onChange={() => setComboPlugsSel({ ...comboPlugsSel, [m.pkg]: !comboPlugsSel[m.pkg] })} />
-                              <span className="dshs-nm" style={{ fontWeight: 600 }}>🧩 {p?.name ?? m.pkg}</span>
-                              <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '手动安装：需自行打开插件页面安装' : '一键安装'}>{m.install_mode === 'manual' ? '✋ 手动' : '⚡ 自动'}</span>
-                              {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
+                              <span className="dshs-nm" style={{ fontWeight: 600 }}>馃З {p?.name ?? m.pkg}</span>
+                              <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '鎵嬪姩瀹夎锛氶渶鑷鎵撳紑鎻掍欢椤甸潰瀹夎' : '涓€閿畨瑁?}>{m.install_mode === 'manual' ? '鉁?鎵嬪姩' : '鈿?鑷姩'}</span>
+                              {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>馃懁 {p.author}</span> : null}
                               {p?.repo_url ? (
-                                <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
+                                <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>馃敆 浠撳簱</a>
                               ) : null}
-                              {props.installed[m.pkg] ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+                              {props.installed[m.pkg] ? <span className="dshs-pill primary">宸茶</span> : <span className="dshs-pill off">鏈</span>}
                             </div>
                           )
                         })}
@@ -1029,18 +1010,18 @@ export function SubscribeView(props: {
                     ) : null}
                   </div>
                 )
-              }) : <div className="dshs-empty" style={{ padding: 10 }}>{cq ? '云端组合中没有匹配项' : '云端暂无组合'}</div>}
+              }) : <div className="dshs-empty" style={{ padding: 10 }}>{cq ? '浜戠缁勫悎涓病鏈夊尮閰嶉」' : '浜戠鏆傛棤缁勫悎'}</div>}
             </div>
-            {/* 手动选择上传：本地已订阅但尚未进云端的组合 */}
+            {/* 鎵嬪姩閫夋嫨涓婁紶锛氭湰鍦板凡璁㈤槄浣嗗皻鏈繘浜戠鐨勭粍鍚?*/}
             {pendingCombos.length ? (
               <>
-                <div className="dshs-subnote" style={{ marginTop: 8 }}>🛫 待上传（本机已订阅、尚未进云端）：勾选后点「上传所选」</div>
+                <div className="dshs-subnote" style={{ marginTop: 8 }}>馃洬 寰呬笂浼狅紙鏈満宸茶闃呫€佸皻鏈繘浜戠锛夛細鍕鹃€夊悗鐐广€屼笂浼犳墍閫夈€?/div>
                 <div className="dshs-cloud-scroll">
                   {pendingCombos.map((n) => (
                     <div className="dshs-pick" key={n} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') setComboUpSel({ ...comboUpSel, [n]: !comboUpSel[n] }) }}>
                       <input type="checkbox" checked={!!comboUpSel[n]} onChange={() => setComboUpSel({ ...comboUpSel, [n]: !comboUpSel[n] })} />
-                      <span className="dshs-nm" style={{ fontWeight: 600 }}>🗂 {n}</span>
-                      <span className="dshs-badge wa">未同步</span>
+                      <span className="dshs-nm" style={{ fontWeight: 600 }}>馃梻 {n}</span>
+                      <span className="dshs-badge wa">鏈悓姝?/span>
                     </div>
                   ))}
                 </div>
@@ -1049,30 +1030,28 @@ export function SubscribeView(props: {
                   style={{ marginTop: 6, marginLeft: 'auto', display: 'block' }}
                   onClick={() => {
                     const sel = Object.keys(comboUpSel).filter((k) => comboUpSel[k])
-                    setCloudMsg('正在上传所选组合…')
-                    void props.onUploadSelected({ combos: sel }).then(() => setCloudMsg(`已上传所选：${sel.length} 个组合`)).catch((e) => setCloudMsg(`上传失败：${String((e as Error)?.message ?? e)}`))
+                    setCloudMsg('姝ｅ湪涓婁紶鎵€閫夌粍鍚堚€?)
+                    void props.onUploadSelected?.({ combos: sel }).then((c) => setCloudMsg(`宸蹭笂浼犳墍閫夛細${sel.length} 涓粍鍚坄))
                     setComboUpSel({})
                   }}
                 >
-                  ↑ 上传所选（{Object.keys(comboUpSel).filter((k) => comboUpSel[k]).length}）
-                </button>
+                  鈫?涓婁紶鎵€閫夛紙{Object.keys(comboUpSel).filter((k) => comboUpSel[k]).length}锛?                </button>
               </>
             ) : (
-              <div className="dshs-subnote" style={{ marginTop: 6 }}>✅ 本机已订阅组合已全部同步到云端。</div>
+              <div className="dshs-subnote" style={{ marginTop: 6 }}>鉁?鏈満宸茶闃呯粍鍚堝凡鍏ㄩ儴鍚屾鍒颁簯绔€?/div>
             )}
           </div>
         ) : null}
       </div>
       <div className="dshs-sec" style={{ marginTop: cloudOpen ? 14 : 4 }}>
-        🗂 我的组合库
-        <span>{groups.length} 个组合</span>
+        馃梻 鎴戠殑缁勫悎搴?        <span>{groups.length} 涓粍鍚?/span>
       </div>
       <div className="dshs-frow">
-        <input className="dshs-input" placeholder="搜索订阅的组合 / 成员插件…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="dshs-input" placeholder="鎼滅储璁㈤槄鐨勭粍鍚?/ 鎴愬憳鎻掍欢鈥? value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <BatchDeleteBar
         count={selectedGroups.length}
-        itemName="组合"
+        itemName="缁勫悎"
         onDelete={() => {
           selectedGroups.forEach((name) => props.onUnsubscribe(name))
           setSubSelected({})
@@ -1097,11 +1076,11 @@ export function SubscribeView(props: {
                 <input type="checkbox" checked={!!subSelected[c.name]} onChange={() => setSubSelected({ ...subSelected, [c.name]: !subSelected[c.name] })} />
                 <span className="dshs-nm">{c.name}</span>
                 {memberUpdates.length > 0 ? (
-                  <span className="dshs-updot">🔵 {memberUpdates.length} 个插件有更新</span>
+                  <span className="dshs-updot">馃數 {memberUpdates.length} 涓彃浠舵湁鏇存柊</span>
                 ) : (
-                  <span className="dshs-compat">✓ 全部最新</span>
+                  <span className="dshs-compat">鉁?鍏ㄩ儴鏈€鏂?/span>
                 )}
-                <button className="dshs-abtn">{isOpen ? '收起插件 ▴' : '查看插件 ▾'}</button>
+                <button className="dshs-abtn">{isOpen ? '鏀惰捣鎻掍欢 鈻? : '鏌ョ湅鎻掍欢 鈻?}</button>
               </div>
               {isOpen ? (
                 <>
@@ -1114,22 +1093,22 @@ export function SubscribeView(props: {
                         <div className="dshs-mem" key={m.pkg}>
                           <span className="dshs-nm" style={{ fontWeight: 600 }}>{m.pkg}</span>
                           {p && up ? (
-                            <span className="dshs-updot">有更新 v{iv} → v{p.version}</span>
+                            <span className="dshs-updot">鏈夋洿鏂?v{iv} 鈫?v{p.version}</span>
                           ) : iv ? (
                             <span className="dshs-compat">v{iv}</span>
                           ) : (
-                            <span className="dshs-compat">未安装</span>
+                            <span className="dshs-compat">鏈畨瑁?/span>
                           )}
                           {p && up ? (
                             props.installing[m.pkg] ? (
-                              <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
+                              <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>鈴?鏇存柊涓€?/button>
                             ) : (
-                              <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onUpdate(m.pkg)}>更新</button>
+                              <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onUpdate(m.pkg)}>鏇存柊</button>
                             )
                           ) : iv ? null : props.installing[m.pkg] ? (
-                            <button className="dshs-abtn" disabled>⏳ 下载中…</button>
+                            <button className="dshs-abtn" disabled>鈴?涓嬭浇涓€?/button>
                           ) : (
-                            <button className="dshs-abtn" onClick={() => props.onInstallPlugin(m.pkg)}>下载</button>
+                            <button className="dshs-abtn" onClick={() => props.onInstallPlugin(m.pkg)}>涓嬭浇</button>
                           )}
                         </div>
                       )
@@ -1137,11 +1116,11 @@ export function SubscribeView(props: {
                   </div>
                   <div className="dshs-mrow">
                     {props.installing['combo:' + c.name] ? (
-                      <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
+                      <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>鈴?鏇存柊涓€?/button>
                     ) : (
-                      <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onInstallCombo(c.name)}>一键更新全部</button>
+                      <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onInstallCombo(c.name)}>涓€閿洿鏂板叏閮?/button>
                     )}
-                    <ConfirmDelete label="退订" confirmText="确认退订" onConfirm={() => props.onUnsubscribe(c.name)} />
+                    <ConfirmDelete label="閫€璁? confirmText="纭閫€璁? onConfirm={() => props.onUnsubscribe(c.name)} />
                   </div>
                 </>
               ) : null}
@@ -1149,14 +1128,14 @@ export function SubscribeView(props: {
           )
         })
       ) : (
-        <div className="dshs-empty">{kw ? '未找到匹配的订阅' : '未订阅任何组合'}</div>
+        <div className="dshs-empty">{kw ? '鏈壘鍒板尮閰嶇殑璁㈤槄' : '鏈闃呬换浣曠粍鍚?}</div>
       )}
     </div>
   )
 }
 
-/** 我的页：GitHub 登录 / 云端同步（插件+订阅组）/ 服务器源 / 我的订阅 / 更新与已安装。 */
-/** 插件库页：只放插件相关内容（云端插件恢复 + 更新提醒 + 已安装插件管理）。 */
+/** 鎴戠殑椤碉細GitHub 鐧诲綍 / 浜戠鍚屾锛堟彃浠?璁㈤槄缁勶級/ 鏈嶅姟鍣ㄦ簮 / 鎴戠殑璁㈤槄 / 鏇存柊涓庡凡瀹夎銆?*/
+/** 鎻掍欢搴撻〉锛氬彧鏀炬彃浠剁浉鍏冲唴瀹癸紙浜戠鎻掍欢鎭㈠ + 鏇存柊鎻愰啋 + 宸插畨瑁呮彃浠剁鐞嗭級銆?*/
 export function MyView(props: {
   plugins: Plugin[]
   installed: Installed
@@ -1166,7 +1145,7 @@ export function MyView(props: {
   onPushCloud: () => Promise<CloudList>
   onRefreshCloud: () => Promise<CloudList>
   onRestorePlugins: (plugins: string[]) => void
-  /** 手动挑选上传（云端已有 + 勾选新增）。 */
+  /** 鎵嬪姩鎸戦€変笂浼狅紙浜戠宸叉湁 + 鍕鹃€夋柊澧烇級銆?*/
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
   onUpdate: (pkg: string) => void
   onUninstall: (pkg: string) => void
@@ -1178,7 +1157,7 @@ export function MyView(props: {
   const [uninstallSelected, setUninstallSelected] = useState<Record<string, boolean>>({})
   const [cloudMsg, setCloudMsg] = useState<string | null>(null)
   const [cloudOpen, setCloudOpen] = useState(false)
-  // 手动选择上传：本地已装但尚未进云端的插件
+  // 鎵嬪姩閫夋嫨涓婁紶锛氭湰鍦板凡瑁呬絾灏氭湭杩涗簯绔殑鎻掍欢锛堝嬀閫?鈫?涓婁紶鎵€閫夛級
   const [upSel, setUpSel] = useState<Record<string, boolean>>({})
 
   const kw = q.trim().toLowerCase()
@@ -1190,8 +1169,7 @@ export function MyView(props: {
     (p) => props.installed[p.id] && (!kw || p.name.toLowerCase().includes(kw) || p.description.toLowerCase().includes(kw)),
   )
   const selectedUninstall = entries.filter((p) => uninstallSelected[p.id]).map((p) => p.id)
-  // 待上传：本地已装（多键，含市场条目）但云端没有的插件
-  const cloudPluginSet = new Set(props.cloud.plugins)
+  // 寰呬笂浼狅細鏈湴宸茶锛堝閿紝鍚競鍦烘潯鐩潈锛変絾浜戠娌℃湁鐨勬彃浠?  const cloudPluginSet = new Set(props.cloud.plugins)
   const pendingPlugins = props.plugins.filter((p) => props.installed[p.id] && !cloudPluginSet.has(p.id))
 
   const toggle = (key: string) => {
@@ -1200,7 +1178,7 @@ export function MyView(props: {
     else next[key] = true
     setDeselected(next)
   }
-  // 云端插件条目：可勾选恢复；附带作者与仓库地址（手动安装指引）
+  // 浜戠鎻掍欢鏉＄洰锛氬彲鍕鹃€夋仮澶嶏紱闄勫甫浣滆€呬笌浠撳簱鍦板潃锛堟墜鍔ㄥ畨瑁呮寚寮曪級
   const cloudRow = (pkg: string) => {
     const p = props.plugins.find((x) => x.id === pkg)
     return (
@@ -1212,98 +1190,94 @@ export function MyView(props: {
         }}
       >
         <input type="checkbox" checked={!deselected['p:' + pkg]} onChange={() => toggle('p:' + pkg)} />
-        <span className="dshs-nm" style={{ fontWeight: 600 }}>🧩 {p?.name ?? pkg}</span>
-        {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
+        <span className="dshs-nm" style={{ fontWeight: 600 }}>馃З {p?.name ?? pkg}</span>
+        {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>馃懁 {p.author}</span> : null}
         {p?.repo_url ? (
-          <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
+          <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>馃敆 浠撳簱</a>
         ) : null}
-        {props.installed[pkg] ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+        {props.installed[pkg] ? <span className="dshs-pill primary">宸茶</span> : <span className="dshs-pill off">鏈</span>}
       </div>
     )
   }
   const doRestorePlugins = () => {
     const ps = props.cloud.plugins.filter((p) => !deselected['p:' + p])
     props.onRestorePlugins(ps)
-    setCloudMsg(`已开始恢复 ${ps.length} 个云端插件`)
+    setCloudMsg(`宸插紑濮嬫仮澶?${ps.length} 涓簯绔彃浠禶)
   }
-  // 全部恢复：弹窗提醒安装方式风险（推荐选择安装；不适用自动安装的手动去官网）
-  const restoreAllPlugins = () => {
+  // 鍏ㄩ儴鎭㈠锛氬脊绐楁彁閱掑畨瑁呮柟寮忛闄╋紙鎺ㄨ崘閫夋嫨瀹夎锛涗笉閫傜敤鑷姩瀹夎鐨勬墜鍔ㄥ幓瀹樼綉锛?  const restoreAllPlugins = () => {
     const ok = window.confirm(
-      '⚠️ 一键全部恢复将依次对每个云端插件执行官方安装命令（dsh plugin add）。\n\n' +
-        '部分插件安装方式多样（手动安装包 / 特殊 Agent 预设等），官方命令可能不适配、恢复会失败。\n\n' +
-        '更稳妥：优先使用「恢复所选」勾选你确认能自动安装的插件；' +
-        '不适配自动安装的，请按条目上的 👤 作者与 🔗 仓库地址手动到官网安装。',
+      '鈿狅笍 涓€閿叏閮ㄦ仮澶嶅皢渚濇瀵规瘡涓簯绔彃浠舵墽琛屽畼鏂瑰畨瑁呭懡浠わ紙dsh plugin add锛夈€俓n\n' +
+        '閮ㄥ垎鎻掍欢瀹夎鏂瑰紡澶氭牱锛堟墜鍔ㄥ畨瑁呭寘 / 鐗规畩 Agent 棰勮绛夛級锛屽畼鏂瑰懡浠ゅ彲鑳戒笉閫傞厤銆佹仮澶嶄細澶辫触銆俓n\n' +
+        '鏇寸ǔ濡ワ細浼樺厛浣跨敤銆屾仮澶嶆墍閫夈€嶅嬀閫変綘纭鑳借嚜鍔ㄥ畨瑁呯殑鎻掍欢锛? +
+        '涓嶉€傞厤鑷姩瀹夎鐨勶紝璇锋寜鏉＄洰涓婄殑 馃懁 浣滆€呬笌 馃敆 浠撳簱鍦板潃鎵嬪姩鍒板畼缃戝畨瑁呫€?,
     )
     if (!ok) return
     props.onRestorePlugins(props.cloud.plugins)
-    setCloudMsg(`已开始恢复 ${props.cloud.plugins.length} 个云端插件`)
+    setCloudMsg(`宸插紑濮嬫仮澶?${props.cloud.plugins.length} 涓簯绔彃浠禶)
   }
 
   return (
     <div>
-      {/* 云端插件：折叠卡片（点击展开变大），风格与更新提醒栏一致 */}
+      {/* 浜戠鎻掍欢锛氭姌鍙犲崱鐗囷紙鐐瑰嚮灞曞紑鍙樺ぇ锛夛紝椋庢牸涓庢洿鏂版彁閱掓爮涓€鑷?*/}
       <div className="dshs-cloudcard" style={{ marginTop: 10 }}>
         <div className="dshs-cloudcard-h" onClick={() => setCloudOpen(!cloudOpen)}>
-          <span className="dshs-nm" style={{ fontWeight: 600 }}>☁️ 云端插件</span>
-          <span className="dshs-compat">{props.cloud.plugins.length} 个已保存</span>
-          <span className="dshs-cloudcard-arrow">{cloudOpen ? '收起 ▴' : '展开 ▾'}</span>
+          <span className="dshs-nm" style={{ fontWeight: 600 }}>鈽侊笍 浜戠鎻掍欢</span>
+          <span className="dshs-compat">{props.cloud.plugins.length} 涓凡淇濆瓨</span>
+          <span className="dshs-cloudcard-arrow">{cloudOpen ? '鏀惰捣 鈻? : '灞曞紑 鈻?}</span>
         </div>
         {cloudOpen ? (
           <div className="dshs-cloudcard-body">
             <div className="dshs-subnote">
-              🛡 隐私说明：云端只保存<b>你手动上传</b>的插件/组合/Agent 清单，不上传任何代码或数据；本地安装不会自动同步，需点「上传」。
-            </div>
+              馃洝 闅愮璇存槑锛氫簯绔彧淇濆瓨<b>浣犳墜鍔ㄤ笂浼?/b>鐨勬彃浠?缁勫悎/Agent 娓呭崟锛屼笉涓婁紶浠讳綍浠ｇ爜鎴栨暟鎹紱鏈湴瀹夎涓嶄細鑷姩鍚屾锛岄渶鐐广€屼笂浼犮€嶃€?            </div>
             <div className="dshs-actions" style={{ marginTop: 6 }}>
               <button
                 className="dshs-abtn"
                 onClick={() => {
-                  setCloudMsg('正在上传本地到云端…')
-                  void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`))
+                  setCloudMsg('姝ｅ湪涓婁紶鏈湴鍒颁簯绔€?)
+                  void props.onPushCloud().then((c) => setCloudMsg(`宸蹭笂浼狅細鎻掍欢 ${c.plugins.length} 路 缁勫悎 ${c.combos.length} 路 Agent ${c.agents.length}`))
                 }}
               >
-                ☁ 上传本地到云端
-              </button>
+                鈽?涓婁紶鏈湴鍒颁簯绔?              </button>
               <button
                 className="dshs-abtn"
                 onClick={() => {
-                  setCloudMsg('正在从云端刷新…')
-                  void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`))
+                  setCloudMsg('姝ｅ湪浠庝簯绔埛鏂扳€?)
+                  void props.onRefreshCloud().then((c) => setCloudMsg(`浜戠娓呭崟锛氭彃浠?${c.plugins.length} 路 缁勫悎 ${c.combos.length} 路 Agent ${c.agents.length}`))
                 }}
               >
-                ↻ 从云端刷新
-              </button>
+                鈫?浠庝簯绔埛鏂?              </button>
               {props.installing['restore'] ? (
-                <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
+                <button className="dshs-abtn pri" disabled>鈴?鎭㈠涓€?/button>
               ) : (
-                <button className="dshs-abtn pri" onClick={doRestorePlugins}>恢复所选</button>
+                <button className="dshs-abtn pri" onClick={doRestorePlugins}>鎭㈠鎵€閫?/button>
               )}
               {props.installing['restore'] ? (
-                <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
+                <button className="dshs-abtn" disabled>鈴?鎭㈠涓€?/button>
               ) : (
-                <button className="dshs-abtn" onClick={restoreAllPlugins}>⚡ 全部恢复（带提醒）</button>
+                <button className="dshs-abtn" onClick={restoreAllPlugins}>鈿?鍏ㄩ儴鎭㈠锛堝甫鎻愰啋锛?/button>
               )}
             </div>
             {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
             <div className="dshs-frow" style={{ marginTop: 8 }}>
-              <input className="dshs-input" placeholder="搜索云端插件…" value={psearch} onChange={(e) => setPsearch(e.target.value)} />
+              <input className="dshs-input" placeholder="鎼滅储浜戠鎻掍欢鈥? value={psearch} onChange={(e) => setPsearch(e.target.value)} />
             </div>
             <div className="dshs-cloud-scroll">
-              {cloudPlugins.length ? cloudPlugins.map((p) => cloudRow(p)) : <div className="dshs-empty" style={{ padding: 10 }}>{pq ? '云端插件中没有匹配项' : '云端暂无插件'}</div>}
+              {cloudPlugins.length ? cloudPlugins.map((p) => cloudRow(p)) : <div className="dshs-empty" style={{ padding: 10 }}>{pq ? '浜戠鎻掍欢涓病鏈夊尮閰嶉」' : '浜戠鏆傛棤鎻掍欢'}</div>}
             </div>
-            {/* 手动选择上传：本地已装但尚未进云端的插件 */}
+            {/* 鎵嬪姩閫夋嫨涓婁紶锛氭湰鍦板凡瑁呬絾灏氭湭杩涗簯绔殑鎻掍欢 */}
             {pendingPlugins.length ? (
               <>
-                <div className="dshs-subnote" style={{ marginTop: 8 }}>🛫 待上传（本地已装、尚未进云端）：勾选后点「上传所选」</div>
+                <div className="dshs-subnote" style={{ marginTop: 8 }}>馃洬 寰呬笂浼狅紙鏈湴宸茶銆佸皻鏈繘浜戠锛夛細鍕鹃€夊悗鐐广€屼笂浼犳墍閫夈€?/div>
                 <div className="dshs-cloud-scroll">
                   {pendingPlugins.map((p) => (
                     <div className="dshs-pick" key={p.id} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setUpSel({ ...upSel, [p.id]: !upSel[p.id] }) }}>
                       <input type="checkbox" checked={!!upSel[p.id]} onChange={() => setUpSel({ ...upSel, [p.id]: !upSel[p.id] })} />
-                      <span className="dshs-nm" style={{ fontWeight: 600 }}>🧩 {p.name}</span>
-                      {p.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
+                      <span className="dshs-nm" style={{ fontWeight: 600 }}>馃З {p.name}</span>
+                      {p.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>馃懁 {p.author}</span> : null}
                       {p.repo_url ? (
-                        <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
+                        <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>馃敆 浠撳簱</a>
                       ) : null}
-                      <span className="dshs-badge wa">未同步</span>
+                      <span className="dshs-badge wa">鏈悓姝?/span>
                     </div>
                   ))}
                 </div>
@@ -1312,43 +1286,41 @@ export function MyView(props: {
                   style={{ marginTop: 6, marginLeft: 'auto', display: 'block' }}
                   onClick={() => {
                     const sel = Object.keys(upSel).filter((k) => upSel[k])
-                    setCloudMsg('正在上传所选到云端…')
-                    void props.onUploadSelected({ plugins: sel }).then(() => setCloudMsg(`已上传所选：${sel.length} 个插件`)).catch((e) => setCloudMsg(`上传失败：${String((e as Error)?.message ?? e)}`))
+                    setCloudMsg('姝ｅ湪涓婁紶鎵€閫夊埌浜戠鈥?)
+                    void props.onUploadSelected?.({ plugins: sel }).then((c) => setCloudMsg(`宸蹭笂浼犳墍閫夛細${sel.length} 涓彃浠禶))
                     setUpSel({})
                   }}
                 >
-                  ↑ 上传所选（{Object.keys(upSel).filter((k) => upSel[k]).length}）
-                </button>
+                  鈫?涓婁紶鎵€閫夛紙{Object.keys(upSel).filter((k) => upSel[k]).length}锛?                </button>
               </>
             ) : (
-              <div className="dshs-subnote" style={{ marginTop: 6 }}>✅ 本地插件已全部同步到云端，无需上传。</div>
+              <div className="dshs-subnote" style={{ marginTop: 6 }}>鉁?鏈湴鎻掍欢宸插叏閮ㄥ悓姝ュ埌浜戠锛屾棤闇€涓婁紶銆?/div>
             )}
           </div>
         ) : null}
       </div>
 
       <div className="dshs-mem" style={{ marginTop: 10, borderColor: unacked.length ? 'rgba(59,158,255,.5)' : undefined }}>
-        <span className="dshs-nm" style={{ fontWeight: 600 }}>🔵 更新提醒</span>
+        <span className="dshs-nm" style={{ fontWeight: 600 }}>馃數 鏇存柊鎻愰啋</span>
         {unacked.length ? (
           <>
-            <span className="dshs-compat">{unacked.length} 个插件可更新（见下方已安装列表）</span>
-            <button className="dshs-abtn" onClick={props.onAckAll} title="将当前可更新插件标记为已知，不再计入提醒">全部已知</button>
+            <span className="dshs-compat">{unacked.length} 涓彃浠跺彲鏇存柊锛堣涓嬫柟宸插畨瑁呭垪琛級</span>
+            <button className="dshs-abtn" onClick={props.onAckAll} title="灏嗗綋鍓嶅彲鏇存柊鎻掍欢鏍囪涓哄凡鐭ワ紝涓嶅啀璁″叆鎻愰啋">鍏ㄩ儴宸茬煡</button>
           </>
         ) : (
-          <span className="dshs-compat" style={{ color: 'var(--up, #2ea043)' }}>全部最新 ✓</span>
+          <span className="dshs-compat" style={{ color: 'var(--up, #2ea043)' }}>鍏ㄩ儴鏈€鏂?鉁?/span>
         )}
       </div>
 
       <div className="dshs-sec" style={{ marginTop: 10 }}>
-        🧩 已安装插件
-        <span>{entries.length} 个</span>
+        馃З 宸插畨瑁呮彃浠?        <span>{entries.length} 涓?/span>
       </div>
       <div className="dshs-frow">
-        <input className="dshs-input" placeholder="搜索已安装插件…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="dshs-input" placeholder="鎼滅储宸插畨瑁呮彃浠垛€? value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <BatchDeleteBar
         count={selectedUninstall.length}
-        itemName="已安装插件"
+        itemName="宸插畨瑁呮彃浠?
         onDelete={() => {
           selectedUninstall.forEach((id) => props.onUninstall(id))
           setUninstallSelected({})
@@ -1360,22 +1332,22 @@ export function MyView(props: {
           <div className="dshs-mem" key={p.id}>
             <input type="checkbox" checked={!!uninstallSelected[p.id]} onChange={() => setUninstallSelected({ ...uninstallSelected, [p.id]: !uninstallSelected[p.id] })} />
             <span className="dshs-nm" style={{ fontWeight: 600 }}>{p.name}</span>
-            <span className="dshs-compat">by {p.author ?? '—'}</span>
+            <span className="dshs-compat">by {p.author ?? '鈥?}</span>
             {hasUpdate(p, props.installed)
-              ? <span className="dshs-updot">v{props.installed[p.id]} → v{p.version}</span>
-              : <span className="dshs-compat">v{p.version} 最新</span>}
+              ? <span className="dshs-updot">v{props.installed[p.id]} 鈫?v{p.version}</span>
+              : <span className="dshs-compat">v{p.version} 鏈€鏂?/span>}
             {hasUpdate(p, props.installed) ? (
               props.installing[p.id] ? (
-                <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
+                <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>鈴?鏇存柊涓€?/button>
               ) : (
-                <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onUpdate(p.id)}>更新</button>
+                <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onUpdate(p.id)}>鏇存柊</button>
               )
             ) : null}
-            <ConfirmDelete label="卸载" confirmText="确认卸载" className="dshs-x" title={`卸载：dsh plugin remove ${p.id}`} onConfirm={() => props.onUninstall(p.id)} />
+            <ConfirmDelete label="鍗歌浇" confirmText="纭鍗歌浇" className="dshs-x" title={`鍗歌浇锛歞sh plugin remove ${p.id}`} onConfirm={() => props.onUninstall(p.id)} />
           </div>
         ))
       ) : (
-        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已装插件' : '尚未安装任何插件（可在插件库点击「下载」安装）'}</div>
+        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '鏈壘鍒板尮閰嶇殑宸茶鎻掍欢' : '灏氭湭瀹夎浠讳綍鎻掍欢锛堝彲鍦ㄦ彃浠跺簱鐐瑰嚮銆屼笅杞姐€嶅畨瑁咃級'}</div>
       )}
     </div>
   )

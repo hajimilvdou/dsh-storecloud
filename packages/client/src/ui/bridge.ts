@@ -107,6 +107,9 @@ export interface StoreBridge {
   restoreSubscriptions(combos: string[]): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
   /** 从云端恢复已装 Agent（按市场条目 id，多键匹配去重；rpc /preset 安装）。 */
   restoreAgents(agents: string[]): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
+  /** 手动挑选上传（服务端 meInstalls 是全量替换语义 → 合并"云端已有 + 所选新增"后整体 PUT），
+   *  让用户决定哪些插件/Agent/组合进云端，而不必全量上传。 */
+  uploadSelected(scope: { plugins?: string[]; agents?: string[]; combos?: string[] }): Promise<CloudList>
   ackUpdate(pkg: string): Promise<Record<string, string>>
   ackAll(): Promise<Record<string, string>>
   /** 客户端插件自身在线更新：复用插件更新机制 = dsh plugin add <spec>@<version>。 */
@@ -271,6 +274,15 @@ export function mockBridge(): StoreBridge {
         plugins: [...new Set(ledger.listInstalls().map((r) => r.pkg))],
         combos: Object.keys(subscriptions),
         agents: [],
+      }
+      return cloud
+    },
+    async uploadSelected(scope) {
+      await ready
+      cloud = {
+        plugins: [...new Set([...cloud.plugins, ...(scope.plugins ?? [])])],
+        combos: [...new Set([...cloud.combos, ...(scope.combos ?? [])])],
+        agents: [...new Set([...cloud.agents, ...(scope.agents ?? [])])],
       }
       return cloud
     },
@@ -824,29 +836,8 @@ export function httpBridge(opts: {
     return { count: body.likes, liked: !!body.liked }
   }
 
-  /** 上传本地安装 + 订阅组 + 已装 Agent 到云端，并让内存中的 cloud 与上传结果保持一致。 */
-  async function syncCloud(): Promise<CloudList> {
-    const t = currentToken()
-    if (!t) {
-      cloud = { plugins: [], combos: [], agents: [] }
-      return cloud
-    }
-    // 上传"有效已装"（本地台账 + 真实已装合并）：CLI/其他方式安装的插件也会一并上传，
-    // 不再出现"本地装了插件、上传却显示 0 个"的问题。
-    const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = Object.entries(effectiveInstalled()).map(([target, version]) => ({
-      target,
-      type: 'plugin',
-      version,
-    }))
-    for (const c of Object.keys(subscriptions)) body.push({ target: c, type: 'combo', version: '1' })
-    // Agent：已装（多键匹配）的 preset 条目按市场 id 上传，恢复时以 id 定位
-    const installedKeys = Object.keys(effectiveInstalled())
-    for (const p of plugins) {
-      if (p.kind !== 'preset') continue
-      if (installedKeys.includes(p.id) || installedKeys.includes(p.name) || installedKeys.includes(p.preset_name ?? '') || installedKeys.includes(p.repo.split('/').pop() ?? '')) {
-        body.push({ target: p.id, type: 'agent', version: p.version || '1' })
-      }
-    }
+  /** 统一上传通道：去重 → PUT（服务器 meInstalls 为全量替换）→ 同步内存 cloud。 */
+  const putInstalls = async (body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }>): Promise<CloudList> => {
     // 严格去重 (type,target)：服务端 user_installs 主键为 (user_id,target,type)，
     // 重复行会导致 PG 批量 INSERT 整个失败——必须在客户端合并。
     const seenKey = new Set<string>()
@@ -878,14 +869,54 @@ export function httpBridge(opts: {
         }
       }
     } catch {
-      /* 离线时至少让本地 UI 与本地台账一致 */
+      /* 离线时至少让本地 UI 与本地清单一致 */
       cloud = {
-        plugins: [...new Set(Object.keys(effectiveInstalled()))],
-        combos: Object.keys(subscriptions),
+        plugins: [...new Set(body.filter((b) => b.type === 'plugin').map((b) => b.target))],
+        combos: [...new Set(body.filter((b) => b.type === 'combo').map((b) => b.target))],
         agents: [...new Set(uploadBody.filter((b) => b.type === 'agent').map((b) => b.target))],
       }
     }
     return cloud
+  }
+
+  /** 上传本地安装 + 订阅组 + 已装 Agent 到云端：全量同步 = 有效已装 + 全部订阅 + 已装 Agent。 */
+  async function syncCloud(): Promise<CloudList> {
+    const t = currentToken()
+    if (!t) {
+      cloud = { plugins: [], combos: [], agents: [] }
+      return cloud
+    }
+    // 上传"有效已装"（本地台账 + 真实已装合并）：CLI/其他方式安装的插件也会一并上传，
+    // 不再出现"本地装了插件、上传却显示 0 个"的问题。
+    const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = Object.entries(effectiveInstalled()).map(([target, version]) => ({
+      target,
+      type: 'plugin',
+      version,
+    }))
+    for (const c of Object.keys(subscriptions)) body.push({ target: c, type: 'combo', version: '1' })
+    // Agent：已装（多键匹配）的 preset 条目按市场 id 上传，恢复时以 id 定位
+    const installedKeys = Object.keys(effectiveInstalled())
+    for (const p of plugins) {
+      if (p.kind !== 'preset') continue
+      if (installedKeys.includes(p.id) || installedKeys.includes(p.name) || installedKeys.includes(p.preset_name ?? '') || installedKeys.includes(p.repo.split('/').pop() ?? '')) {
+        body.push({ target: p.id, type: 'agent', version: p.version || '1' })
+      }
+    }
+    return putInstalls(body)
+  }
+
+  /** 手动挑选上传：云端已有 ∪ 勾选新增（服务端全量替换，必须合并），未勾选的本地项不进云端。 */
+  const uploadSelected = async (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }): Promise<CloudList> => {
+    const t = currentToken()
+    if (!t) throw new Error('请先登录 GitHub 后再上传云端')
+    const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = []
+    const pset = new Set([...cloud.plugins, ...(scope.plugins ?? [])])
+    for (const p of pset) body.push({ target: p, type: 'plugin', version: latestVersion(plugins, p) || '1.0.0' })
+    const cset = new Set([...cloud.combos, ...(scope.combos ?? [])])
+    for (const c of cset) body.push({ target: c, type: 'combo', version: '1' })
+    const aset = new Set([...cloud.agents, ...(scope.agents ?? [])])
+    for (const a of aset) body.push({ target: a, type: 'agent', version: '1' })
+    return putInstalls(body)
   }
 
   const installRecord = (pkg: string, version: string): InstallRecord => ({
@@ -1275,6 +1306,16 @@ export function httpBridge(opts: {
       }
       await loadPromise
       return syncCloud()
+    },
+    async uploadSelected(scope) {
+      if (!loadStarted) {
+        loadStarted = true
+        loadPromise = load()
+          .then(notify)
+          .catch(() => {})
+      }
+      await loadPromise
+      return uploadSelected(scope)
     },
     async install(pkg) {
       // 防重复安装：本地台账或真实已装（含 DSH 自带插件）中已存在 → 幂等跳过。
