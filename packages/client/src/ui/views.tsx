@@ -167,7 +167,8 @@ export function AgentView(props: {
   const kw = localKw || globalKw
   // 安装 key 预计算（多键匹配，供排序与按钮状态共用）
   const keyOf = new Map(props.agents.map((a) => [a.id, agentInstalledKey(a, props.installed)]))
-  const results = props.agents.filter((a) => {
+  // 与插件库一致：已安装靠前；组内按星数从高到低（用户期望的展示顺序），稳定排序。
+  const sorted = [...props.agents].filter((a) => {
     if (!kw) return true
     return (
       a.name.toLowerCase().includes(kw) ||
@@ -176,12 +177,13 @@ export function AgentView(props: {
       (a.preset_name ?? '').toLowerCase().includes(kw)
     )
   })
-  // 与插件库一致：已安装的 Agent 排最前（稳定排序），方便管理/更新。
-  results.sort((a, b) => {
+  sorted.sort((a, b) => {
     const sa = keyOf.get(a.id) ? 0 : 1
     const sb = keyOf.get(b.id) ? 0 : 1
-    return sa - sb
+    if (sa !== sb) return sa - sb
+    return (b.stars ?? 0) - (a.stars ?? 0)
   })
+  const results = sorted
   const PAGE_SIZE = 60
   const [page, setPage] = useState(1)
   useEffect(() => { setPage(1) }, [kw])
@@ -256,6 +258,8 @@ export function AgentLibraryView(props: {
   onRestoreAgents: (ids: string[]) => void
   /** 手动挑选上传 Agent（云端已有 + 勾选新增）。 */
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
+  /** 从云端删除指定项（仅云端清单，不动本地安装）。 */
+  onDeleteCloud: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
 }) {
   const [q, setQ] = useState('')
   const [uninstallSelected, setUninstallSelected] = useState<Record<string, boolean>>({})
@@ -291,7 +295,7 @@ export function AgentLibraryView(props: {
           <div className="dshs-cloudcard-body">
             <div className="dshs-subnote">云端保存的是你手动上传的 Agent 清单（不自动同步）。勾选后「恢复所选」；已安装的会自动跳过。</div>
             <div className="dshs-actions" style={{ marginTop: 6 }}>
-              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在上传本地到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>☁ 上传本地到云端</button>
+              <button className="dshs-abtn" onClick={() => { if (!window.confirm('上传全部到云端：云端清单将覆盖为本地全部已装/已订阅项。确定？')) return; setCloudMsg('正在上传本地到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>☁ 上传全部到云端</button>
               <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>↻ 从云端刷新</button>
               <button className="dshs-abtn pri" onClick={() => {
                 const ids = props.cloud.agents.filter((a) => agentSel[a])
@@ -320,6 +324,18 @@ export function AgentLibraryView(props: {
                         <a className="dshs-lk" href={a.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.repo_url}>🔗 仓库</a>
                       ) : null}
                       {iv ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+                      <button
+                        className="dshs-x"
+                        title="从云端删除（不影响本地安装）"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!window.confirm(`从云端删除 Agent「${a?.name ?? id}」？仅移除云端清单。`)) return
+                          setCloudMsg('正在从云端删除…')
+                          void props.onDeleteCloud({ agents: [id] }).then(() => setCloudMsg(`已从云端删除：${a?.name ?? id}`)).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
+                        }}
+                      >
+                        🗑
+                      </button>
                     </div>
                   )
                 })
@@ -921,6 +937,8 @@ export function SubscribeView(props: {
   onRestoreSubs: (combos: string[]) => void
   /** 手动挑选上传（云端已有 + 勾选新增）。 */
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
+  /** 从云端删除指定项（仅云端清单，不动本地安装）。 */
+  onDeleteCloud: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
 }) {
   const [q, setQ] = useState('')
   const [cloudOpen, setCloudOpen] = useState(false)
@@ -978,7 +996,7 @@ export function SubscribeView(props: {
           <div className="dshs-cloudcard-body">
             <div className="dshs-subnote">云端组合按<b>组</b>展示：勾选组 = 订阅该组；展开后可单独勾选组内<b>插件</b>跨组安装；重复插件自动跳过。</div>
             <div className="dshs-actions" style={{ marginTop: 6 }}>
-              <button className="dshs-abtn" onClick={() => { setCloudMsg('正在上传本地组合到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>☁ 上传本地到云端</button>
+              <button className="dshs-abtn" onClick={() => { if (!window.confirm('上传全部到云端：云端清单将覆盖为本地全部已装/已订阅项。确定？')) return; setCloudMsg('正在上传本地组合到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>☁ 上传全部到云端</button>
               <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>↻ 从云端刷新</button>
               {props.installing['restore'] ? (
                 <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
@@ -1007,6 +1025,18 @@ export function SubscribeView(props: {
                       <span className="dshs-nm" style={{ fontWeight: 600 }}>🗂 {name}</span>
                       <span className="dshs-compat" style={{ marginLeft: 0 }}>{members.length} 个插件</span>
                       {sub ? <span className="dshs-pill primary">已订阅</span> : <span className="dshs-pill off">未订阅</span>}
+                      <button
+                        className="dshs-x"
+                        title="从云端删除（不影响本地安装）"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!window.confirm(`从云端删除组合「${name}」？仅移除云端清单。`)) return
+                          setCloudMsg('正在从云端删除…')
+                          void props.onDeleteCloud({ combos: [name] }).then(() => setCloudMsg(`已从云端删除：${name}`)).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
+                        }}
+                      >
+                        🗑
+                      </button>
                     </div>
                     {members.length ? (
                       <div className="dshs-pick-sub-in">
@@ -1168,6 +1198,8 @@ export function MyView(props: {
   onRestorePlugins: (plugins: string[]) => void
   /** 手动挑选上传（云端已有 + 勾选新增）。 */
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
+  /** 从云端删除指定项（仅云端清单，不动本地安装）。 */
+  onDeleteCloud: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
   onUpdate: (pkg: string) => void
   onUninstall: (pkg: string) => void
   onAckAll: () => void
@@ -1217,7 +1249,20 @@ export function MyView(props: {
         {p?.repo_url ? (
           <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
         ) : null}
+        {p ? null : <span className="dshs-badge ba" title="该插件不在插件库收录范围，无法在插件库搜索到；仅可从云端恢复">库外插件</span>}
         {props.installed[pkg] ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+        <button
+          className="dshs-x"
+          title="从云端删除（不影响本地安装）"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (!window.confirm(`从云端删除「${p?.name ?? pkg}」？仅移除云端清单，本地安装不受影响。`)) return
+            setCloudMsg('正在从云端删除…')
+            void props.onDeleteCloud({ plugins: [pkg] }).then(() => setCloudMsg(`已从云端删除：${p?.name ?? pkg}`)).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
+          }}
+        >
+          🗑
+        </button>
       </div>
     )
   }
@@ -1257,11 +1302,11 @@ export function MyView(props: {
               <button
                 className="dshs-abtn"
                 onClick={() => {
-                  setCloudMsg('正在上传本地到云端…')
+                  if (!window.confirm('上传全部到云端：云端清单将覆盖为本地全部已装/已订阅项。确定？')) return; setCloudMsg('正在上传本地到云端…')
                   void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`))
                 }}
               >
-                ☁ 上传本地到云端
+                ☁ 上传全部到云端
               </button>
               <button
                 className="dshs-abtn"

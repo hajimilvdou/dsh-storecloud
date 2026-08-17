@@ -522,6 +522,12 @@ export function StoreApp(props: {
     setCloud(c)
     return c
   }
+  /** 从云端删除（仅移云端清单，不影响本地安装）。 */
+  const doDeleteCloud = async (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => {
+    const c = await props.bridge.deleteFromCloud(scope)
+    setCloud(c)
+    return c
+  }
   const doRefreshCloud = async () => {
     const s = await props.bridge.refresh()
     applyState(s)
@@ -562,6 +568,7 @@ export function StoreApp(props: {
         onRefreshCloud={doRefreshCloud}
         onRestorePlugins={doRestorePlugins}
         onUploadSelected={doUploadSelected}
+        onDeleteCloud={doDeleteCloud}
         onUpdate={doUpdate}
         onUninstall={doUninstall}
         onAckAll={doAckAll}
@@ -582,6 +589,7 @@ export function StoreApp(props: {
         onRefreshCloud={doRefreshCloud}
         onRestoreSubs={doRestoreSubs}
         onUploadSelected={doUploadSelected}
+        onDeleteCloud={doDeleteCloud}
       />
     ) : (
       <AgentLibraryView
@@ -596,6 +604,7 @@ export function StoreApp(props: {
         onRefreshCloud={doRefreshCloud}
         onRestoreAgents={doRestoreAgents}
         onUploadSelected={doUploadSelected}
+        onDeleteCloud={doDeleteCloud}
       />
     )
 

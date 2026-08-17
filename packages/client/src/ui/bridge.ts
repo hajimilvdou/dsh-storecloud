@@ -110,6 +110,8 @@ export interface StoreBridge {
   /** 手动挑选上传（服务端 meInstalls 是全量替换语义 → 合并"云端已有 + 所选新增"后整体 PUT），
    *  让用户决定哪些插件/Agent/组合进云端，而不必全量上传。 */
   uploadSelected(scope: { plugins?: string[]; agents?: string[]; combos?: string[] }): Promise<CloudList>
+  /** 从云端删除指定项（仅移除云端清单，不影响本地安装）；服务端全量替换语义 → 云端剩余项整体 PUT。 */
+  deleteFromCloud(scope: { plugins?: string[]; agents?: string[]; combos?: string[] }): Promise<CloudList>
   ackUpdate(pkg: string): Promise<Record<string, string>>
   ackAll(): Promise<Record<string, string>>
   /** 客户端插件自身在线更新：复用插件更新机制 = dsh plugin add <spec>@<version>。 */
@@ -283,6 +285,18 @@ export function mockBridge(): StoreBridge {
         plugins: [...new Set([...cloud.plugins, ...(scope.plugins ?? [])])],
         combos: [...new Set([...cloud.combos, ...(scope.combos ?? [])])],
         agents: [...new Set([...cloud.agents, ...(scope.agents ?? [])])],
+      }
+      return cloud
+    },
+    async deleteFromCloud(scope) {
+      await ready
+      const dp = new Set(scope.plugins ?? [])
+      const da = new Set(scope.agents ?? [])
+      const dc = new Set(scope.combos ?? [])
+      cloud = {
+        plugins: cloud.plugins.filter((p) => !dp.has(p)),
+        combos: cloud.combos.filter((c) => !dc.has(c)),
+        agents: cloud.agents.filter((a) => !da.has(a)),
       }
       return cloud
     },
@@ -919,6 +933,21 @@ export function httpBridge(opts: {
     return putInstalls(body)
   }
 
+  /** 从云端删除指定项：云端剩余项整体 PUT（仅改云端清单，不动本地安装）。 */
+  const deleteFromCloud = async (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }): Promise<CloudList> => {
+    const t = currentToken()
+    if (!t) throw new Error('请先登录 GitHub 后再管理云端')
+    const delP = new Set(scope.plugins ?? [])
+    const delA = new Set(scope.agents ?? [])
+    const delC = new Set(scope.combos ?? [])
+    const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = [
+      ...cloud.plugins.filter((p) => !delP.has(p)).map((p) => ({ target: p, type: 'plugin' as const, version: latestVersion(plugins, p) || '1.0.0' })),
+      ...cloud.agents.filter((a) => !delA.has(a)).map((a) => ({ target: a, type: 'agent' as const, version: '1' })),
+      ...cloud.combos.filter((c) => !delC.has(c)).map((c) => ({ target: c, type: 'combo' as const, version: '1' })),
+    ]
+    return putInstalls(body)
+  }
+
   const installRecord = (pkg: string, version: string): InstallRecord => ({
     pkg,
     version,
@@ -1316,6 +1345,16 @@ export function httpBridge(opts: {
       }
       await loadPromise
       return uploadSelected(scope)
+    },
+    async deleteFromCloud(scope) {
+      if (!loadStarted) {
+        loadStarted = true
+        loadPromise = load()
+          .then(notify)
+          .catch(() => {})
+      }
+      await loadPromise
+      return deleteFromCloud(scope)
     },
     async install(pkg) {
       // 防重复安装：本地台账或真实已装（含 DSH 自带插件）中已存在 → 幂等跳过。
