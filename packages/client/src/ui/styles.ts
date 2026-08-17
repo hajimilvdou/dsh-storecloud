@@ -136,6 +136,9 @@ export const STORE_CSS = `
 .dshs-src-add{margin-top:10px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;background:var(--bg2)}
 .dshs-src-add .dshs-frow:last-of-type{margin-bottom:0}
 .dshs-input{flex:1;background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:7px 9px;color:var(--tx);font-size:12px;outline:none;min-width:0}
+/* 组合简介：内容增多自动加行（不显示拖拽手柄，超出随弹窗滚动） */
+.dshs-desc{resize:none;overflow:hidden;min-height:38px;line-height:1.6;box-sizing:border-box;display:block;width:100%}
+.dshs-desc:focus{border-color:var(--brand2)}
 .dshs-frow{display:flex;gap:8px;margin-bottom:8px;align-items:center}
 .dshs-notif{border:1px solid var(--line);border-left:3px solid #3b9eff;border-radius:9px;padding:9px 11px;margin-bottom:8px;background:var(--bg3)}
 .dshs-notif .nt{font-size:12px;color:var(--tx);line-height:1.55}

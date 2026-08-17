@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Combo, Plugin } from '@dsh-store/shared'
 import type { PluginSortKey } from '../core/index.js'
 import type { CloudList, ComboMemberInput } from './bridge.js'
@@ -324,6 +324,17 @@ export function ComboView(props: {
   const [err, setErr] = useState<string | null>(null)
   const [exp, setExp] = useState<Record<string, boolean>>({})
   const [delSelected, setDelSelected] = useState<Record<string, boolean>>({})
+  // 简介输入框引用：编辑已有组合时按内容校准行高（自动增高只在键入时触发，打开时也需恢复完整高度）。
+  const descRef = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    if (open) {
+      const el = descRef.current
+      if (el) {
+        el.style.height = 'auto'
+        el.style.height = el.scrollHeight + 'px'
+      }
+    }
+  }, [open, desc])
 
   const allInstalled = Object.keys(props.installed)
   const libIds = new Set(props.plugins.map((p) => p.id))
@@ -364,6 +375,12 @@ export function ComboView(props: {
   ]
   // 搜索：名称或作者
   const filtered = pickable.filter((it) => !kw || it.name.toLowerCase().includes(kw) || (it.author ?? '').toLowerCase().includes(kw))
+  // 已安装优先：已装(0) → 库内未装(1) → 库外(2)。稳定排序，搜索词过滤后依旧保持该次序。
+  filtered.sort((a, b) => {
+    const sa = a.inLib ? (a.version ? 0 : 1) : 2
+    const sb = b.inLib ? (b.version ? 0 : 1) : 2
+    return sa - sb
+  })
   // 渲染上限：库内 3000+ 条全渲染会卡；已选中的成员始终保留在可见列表（编辑不丢项）。
   const VISIBLE_CAP = 150
   const visible = [...filtered.slice(0, VISIBLE_CAP), ...filtered.slice(VISIBLE_CAP).filter((it) => sel[it.id])]
@@ -571,8 +588,22 @@ export function ComboView(props: {
               <div className="dshs-frow">
                 <input className="dshs-input" placeholder="组合名称（≤30字）" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
-              <div className="dshs-frow">
-                <input className="dshs-input" placeholder="一句话简介（≤200字）" value={desc} onChange={(e) => setDesc(e.target.value)} />
+              <div className="dshs-frow" style={{ alignItems: 'flex-start' }}>
+                <textarea
+                  ref={descRef}
+                  className="dshs-input dshs-desc"
+                  placeholder="一句话简介（≤200字），可换行"
+                  maxLength={200}
+                  rows={2}
+                  value={desc}
+                  onChange={(e) => setDesc(e.target.value)}
+                  onInput={(e) => {
+                    // 随内容自动增高（超过弹窗高度时整体滚动，不再只有一行、检查不便）
+                    const el = e.target as HTMLTextAreaElement
+                    el.style.height = 'auto'
+                    el.style.height = el.scrollHeight + 'px'
+                  }}
+                />
               </div>
               <div className="dshs-sec" style={{ marginTop: 4 }}>
                 🧩 选择组合成员（插件库优先）
@@ -1088,7 +1119,7 @@ export function MyView(props: {
           </div>
         ))
       ) : (
-        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已装插件' : '尚未安装任何插件'}</div>
+        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已装插件' : '尚未安装任何插件（可在插件库点击「下载」安装）'}</div>
       )}
     </div>
   )
