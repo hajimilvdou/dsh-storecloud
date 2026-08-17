@@ -563,6 +563,8 @@ export function AccountDrawer(props: {
   storeLocs?: { section?: boolean; header?: boolean }
   /** 切换放置位置(写 localStorage + 通知壳侧)。 */
   onSetLoc?: (key: 'section' | 'header', on: boolean) => void
+  /** 自定义入口标题(写 localStorage + 通知壳侧；防与其他插件标题撞名)。 */
+  onSetLocTitle?: (key: 'section' | 'header', title: string) => void
   serverUrl?: string
   /** 组合/数据更新频率（分钟，服务端配置下发，客户端按此心跳拉取）。 */
   heartbeatMin?: number
@@ -581,6 +583,15 @@ export function AccountDrawer(props: {
   const [confirmDel, setConfirmDel] = useState(false)
   const [delMsg, setDelMsg] = useState<string | null>(null)
   const [updMsg, setUpdMsg] = useState<string | null>(null)
+  // 入口自定义标题（localStorage 持久化；默认「🧩 插件商城」，可改防与别的插件标题冲突）
+  const [locTitles, setLocTitles] = useState<{ section: string; header: string }>(() => ({
+    section: (() => { try { return localStorage.getItem('dsh_store_loc_title_section') || '' } catch { return '' } })(),
+    header: (() => { try { return localStorage.getItem('dsh_store_loc_title_header') || '' } catch { return '' } })(),
+  }))
+  const saveLocTitle = (key: 'section' | 'header', title: string) => {
+    try { localStorage.setItem('dsh_store_loc_title_' + key, title.trim()) } catch { /* ignore */ }
+    props.onSetLocTitle?.(key, title)
+  }
 
   // 服务器源管理（登录与否都可用：未登录也能先接好源再登录）
   const sourcesManager = (
@@ -595,6 +606,7 @@ export function AccountDrawer(props: {
 
   // 商城放置位置切换(两个位置：设置页/会话头部；悬浮球已移除)：
   // 能力清单缺失/为 false = 当前应用(打包版可能裁剪该位置)不适配 → 置灰并提醒。
+  // ⚠ 至少保留一个开启：全部关闭后商城入口全无（含「我的」开关面板）会永久锁死，关闭最后一个时阻止。
   const locItems: Array<{ key: 'section' | 'header'; label: string; hint: string }> = [
     { key: 'section', label: '设置页', hint: '左下角设置中(默认)' },
     { key: 'header', label: '会话头部', hint: '对话/轨迹上方大页面' },
@@ -607,20 +619,51 @@ export function AccountDrawer(props: {
         const on = supported && (() => {
           try { return localStorage.getItem('dsh_store_loc_' + it.key) !== '0' } catch { return true }
         })()
+        const title = locTitles[it.key]
         return (
-          <div key={it.key} className="dshs-mem" style={{ opacity: supported ? 1 : 0.55 }}>
-            <span className="dshs-nm" style={{ fontWeight: 600 }}>{it.label}</span>
-            <span className="dshs-compat" style={{ marginLeft: 0 }}>{it.hint}</span>
-            {supported ? (
-              <button
-                className={'dshs-loc-toggle' + (on ? ' on' : '')}
-                onClick={() => props.onSetLoc?.(it.key, !on)}
-                title={on ? '点击关闭' : '点击开启'}
-              >
-                {on ? '已开启' : '已关闭'}
-              </button>
-            ) : (
-              <span className="dshs-badge ba">不适配</span>
+          <div key={it.key} className="dshs-mem" style={{ opacity: supported ? 1 : 0.55, flexDirection: 'column', alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="dshs-nm" style={{ fontWeight: 600 }}>{it.label}</span>
+              <span className="dshs-compat" style={{ marginLeft: 0 }}>{it.hint}</span>
+              {supported ? (
+                <button
+                  className={'dshs-loc-toggle' + (on ? ' on' : '')}
+                  onClick={() => {
+                    if (on) {
+                      // 即将关闭当前入口：检查其他位置是否至少有一个开启
+                      const othersOn = locItems.some((o) => {
+                        if (o.key === it.key) return false
+                        if (props.storeLocs?.[o.key] === false) return false
+                        try { return localStorage.getItem('dsh_store_loc_' + o.key) !== '0' } catch { return true }
+                      })
+                      if (!othersOn) {
+                        window.alert('至少保留一个商城入口：请先开启另一位置，再关闭当前入口')
+                        return
+                      }
+                    }
+                    props.onSetLoc?.(it.key, !on)
+                  }}
+                  title={on ? '点击关闭' : '点击开启'}
+                >
+                  {on ? '已开启' : '已关闭'}
+                </button>
+              ) : (
+                <span className="dshs-badge ba">不适配</span>
+              )}
+            </div>
+            {supported && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <span style={{ fontSize: 12, color: 'var(--tx2)' }}>入口标题</span>
+                <input
+                  className="dshs-loc-title"
+                  value={title}
+                  placeholder="🧩 插件商城"
+                  maxLength={24}
+                  onChange={(e) => setLocTitles((p) => ({ ...p, [it.key]: e.target.value }))}
+                  onBlur={() => saveLocTitle(it.key, title)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                />
+              </div>
             )}
           </div>
         )
@@ -630,7 +673,10 @@ export function AccountDrawer(props: {
           ⚠ 部分位置在当前应用不适配（已置灰）：打包版应用可能未包含对应界面，商城会自动隐藏这些位置的入口。
         </div>
       ) : (
-        <div className="dshs-subnote">切换后立即生效；关闭全部位置时,仅保留「我的」页入口。</div>
+        <div className="dshs-subnote" style={{ lineHeight: 1.5 }}>
+          切换后立即生效；关闭的入口标题会同步隐藏；至少保留一个入口，防止商城无法打开。
+          <br />✋ 会话头部入口可<b>拖动排序</b>：直接把 🧩 tab 拖到想要的位置，位置自动记忆（刷新不丢）；标题可自行改名，避免与其他插件入口冲突。
+        </div>
       )}
     </div>
   )

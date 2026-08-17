@@ -98,6 +98,10 @@ export const STORE_CSS = `
 .dshs-loc-toggle.on{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;border-color:transparent}
 .dshs-loc-toggle:hover{border-color:var(--brand2);color:var(--brand2)}
 .dshs-loc-toggle.on:hover{color:#fff}
+/* 入口标题自定义输入 */
+.dshs-loc-title{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:3px 8px;color:var(--tx);font-size:12px;outline:none}
+.dshs-loc-title:focus{border-color:var(--brand2)}
+.dshs-loc-title::placeholder{color:var(--tx2);opacity:.6}
 .dshs-lib{font-size:10.5px;white-space:nowrap}
 .dshs-lib.ok{color:var(--brand2)}
 .dshs-lib.warn{color:var(--danger)}

@@ -417,6 +417,14 @@ export function StoreApp(props: {
       /* 顶层窗口时忽略 */
     }
   }
+  /** 自定义入口标题：写 localStorage + 通知壳侧即时替换入口文本（防与其他插件标题冲突）。 */
+  const doSetLocTitle = (key: 'section' | 'header', title: string) => {
+    try {
+      window.parent.postMessage({ type: 'dsh-store-loc-title', key, title }, '*')
+    } catch {
+      /* 顶层窗口时忽略 */
+    }
+  }
   /* 点赞功能已取消：客户端无入口,服务端 /api/v1/likes 由 feature.likes 门控(旧客户端兼容)。 */
   const doAddCombo = (name: string, desc: string, members: ComboMemberInput[]) =>
     void props.bridge.addCombo(name, desc, members).then((cs) => {
@@ -657,6 +665,7 @@ export function StoreApp(props: {
         authNotice={authNotice}
         storeLocs={storeLocs}
         onSetLoc={doSetLoc}
+        onSetLocTitle={doSetLocTitle}
         serverUrl={serverUrl || props.serverUrl}
         heartbeatMin={data?.heartbeatMin ?? 30}
         clientVersion={data?.clientVersion ?? CLIENT_PLUGIN_VERSION}
