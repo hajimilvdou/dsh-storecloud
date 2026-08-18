@@ -2,6 +2,7 @@ import { Component, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { StoreApp } from './ui/StoreApp.js'
 import { httpBridge, mockBridge, type StoreBridge, type TokenStore } from './ui/bridge.js'
+import type { StoreState } from './ui/bridge.js'
 import type { KeyValueStore } from './store/ledger.js'
 import { STORE_CSS } from './ui/styles.js'
 
@@ -103,12 +104,14 @@ const sourceStore: KeyValueStore = {
   remove: async (k) => localStorage.removeItem(k),
 }
 
-async function pickBridge(): Promise<{ bridge: StoreBridge; banner: string | null }> {
+async function pickBridge(): Promise<{ bridge: StoreBridge; banner: string | null; initial: StoreState }> {
   const server = currentServer()
   const rpcBase = new URLSearchParams(window.location.search).get('rpc')?.trim() ?? ''
   const demoMode = new URLSearchParams(window.location.search).get('mode') === 'demo'
   if (demoMode) {
-    return { bridge: mockBridge(), banner: '演示数据模式：当前展示本地示例数据，可在右上角「我的」体验登录 / 云端同步 / 服务器源。' }
+    const mb = mockBridge()
+    const initial = await mb.bootstrap()
+    return { bridge: mb, banner: '演示数据模式：当前展示本地示例数据，可在右上角「我的」体验登录 / 云端同步 / 服务器源。', initial }
   }
   const live = httpBridge({
     baseUrl: server,
@@ -117,15 +120,10 @@ async function pickBridge(): Promise<{ bridge: StoreBridge; banner: string | nul
     sourceStore,
     rpcBase,
   })
-  // bootstrap 立即返回（本地缓存秒开 / 空态），全量同步在后台进行；
-  // 无缓存且源未连接时给一条顶部提示（界面骨架照常渲染，不整页等待）。
-  const state = await live.bootstrap()
-  const offline = state.plugins.length === 0 && state.combos.length === 0 && state.sources.every((s) => s.status === 'unreachable')
-  if (!offline) return { bridge: live, banner: null }
-  return {
-    bridge: live,
-    banner: `正在连接 ${server}…首次同步插件库可能需要几十秒，请稍候（之后打开面板直接使用本地缓存，不再重复全量拉取）。`,
-  }
+  // 仅本机快速恢复（读缓存/台账，毫秒级、无网络/RPC）：首帧直接带数据出框架、杜绝黑屏；
+  // 联网同步与真实已装清单由 StoreApp 的 bootstrap() 后台补全。
+  const initial = await live.bootstrapLocal()
+  return { bridge: live, banner: null, initial }
 }
 
 async function boot() {
@@ -134,6 +132,8 @@ async function boot() {
   if (!root) return
   const reactRoot = createRoot(root)
 
+  // pickBridge 内部已 await bootstrap（本地毫秒级）：有缓存带着旧数据出框架（秒进），
+  // 无缓存返回空态由各 tab 顶部横幅提示"正在连接"。bootstrap 全程非阻塞（load 后台执行）。
   let picked
   try {
     picked = await pickBridge()
@@ -206,6 +206,7 @@ async function boot() {
         clientIgnoreStore={clientIgnoreStore}
         serverUrl={currentServer()}
         embedded={embed}
+        initialData={picked.initial}
       />
     </Boundary>,
   )

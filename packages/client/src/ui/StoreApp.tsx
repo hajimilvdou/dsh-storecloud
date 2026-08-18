@@ -70,10 +70,12 @@ export function StoreApp(props: {
   tokenStore?: TokenStore
   serverUrl?: string
   embedded?: boolean
-  /** 客户端插件自身更新提醒的“忽略版本”持久化（localStorage / Host KV）。 */
+  /** 客户端插件自身更新提醒的"忽略版本"持久化（localStorage / Host KV）。 */
   clientIgnoreStore?: TokenStore
+  /** preview 已 await 的 bootstrap 结果：首帧直接用（秒进、不闪骨架）；缺省时 StoreApp 自行 bootstrap。 */
+  initialData?: StoreState | null
 }) {
-  const [data, setData] = useState<StoreState | null>(null)
+  const [data, setData] = useState<StoreState | null>(props.initialData ?? null)
   const [open, setOpen] = useState(() => !!props.embedded)
   const [ignoredClientVersion, setIgnoredClientVersion] = useState<string | null>(() => props.clientIgnoreStore?.current ?? null)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
@@ -114,6 +116,10 @@ export function StoreApp(props: {
   const [storeLocs, setStoreLocs] = useState<{ section?: boolean; header?: boolean }>({})
   /** 登录结果全局横幅（成功/失败都显示几秒后消失，任何页面可见，不依赖抽屉开关）。 */
   const [authNotice, setAuthNotice] = useState<{ ok: boolean; msg: string } | null>(null)
+  /** 初始化异常：bootstrap 兜底不应失败；若仍发生则在骨架区显示错误+重试，避免无限卡加载。 */
+  const [bootErr, setBootErr] = useState<string | null>(null)
+  /** 同步失败重试中（横幅按钮显示"重新同步中…"；失败再显示原因+重试，循环尝试）。 */
+  const [syncRetrying, setSyncRetrying] = useState(false)
 
   const applyState = (s: StoreState) => {
     setData(s)
@@ -140,7 +146,12 @@ export function StoreApp(props: {
       if (alive) applyState(s)
     }
     // bootstrap 立即返回（本地缓存/空态），后台全量/增量同步完成后经 subscribe 刷新。
-    props.bridge.bootstrap().then(apply)
+    setBootErr(null)
+    props.bridge.bootstrap().then(apply).catch((e) => {
+      // 兜底：即便 bootstrap 意外 reject，也保证骨架态必消失——显示错误骨架 + 重试，
+      // 绝不出现"加载中提示永不消失"。
+      if (alive) setBootErr(String((e as Error)?.message ?? e))
+    })
     const unsub = props.bridge.subscribe?.(apply)
     return () => {
       alive = false
@@ -533,6 +544,15 @@ export function StoreApp(props: {
     applyState(s)
     return s.cloud
   }
+  /** 同步失败重试：重新走全量同步；成功自动清错误横幅，失败继续显示原因+重试。 */
+  const retrySync = () => {
+    setSyncRetrying(true)
+    void props.bridge
+      .refresh()
+      .then(applyState)
+      .catch((e) => window.alert(String((e as Error)?.message ?? e)))
+      .finally(() => setSyncRetrying(false))
+  }
 
   const body =
     tab === 'plugin' ? (
@@ -624,6 +644,24 @@ export function StoreApp(props: {
       </button>
     ))
 
+  // 当前页数据是否就绪（连接横幅按页面适配：只在当前页数据为空时提示，避免死板全覆盖）
+  // 六大页横幅适配（商店页 + 库页各自的数据依赖）：
+  // - 插件页/插件库 都依赖 plugins 全量（库页"已安装/云端/更新"的成员与元数据都来自它）
+  // - 组合页/组合库 都依赖 combos 全量（库页订阅组的定义与成员展示需要它）
+  // - Agent 页/Agent 库 都依赖 agents 全量（库页已装 Agent 靠市场条目反查）
+  // 所以触发条件按"该页依赖的核心市场数据是否为空"判定（且 syncing 时），避免把
+  // "数据本为空"（如没装插件/服务器组合少）误当"连接中"而常态显示横幅。
+  const tabDataEmpty = data
+    ? tab === 'plugin' || tab === 'my'
+      ? data.plugins.length === 0
+      : tab === 'combo' || tab === 'sub'
+        ? data.combos.length === 0
+        : tab === 'agent' || tab === 'agentLib'
+          ? agents.length === 0
+          : false
+    : false
+  const tabDataLabel = tab === 'plugin' || tab === 'my' ? '插件' : tab === 'combo' || tab === 'sub' ? '组合' : 'Agent'
+
   const panelKids = [
     <TopBar
       key="top"
@@ -673,6 +711,21 @@ export function StoreApp(props: {
     authNotice ? (
       <div key="authnotice" className="dshs-cbanner" style={{ borderLeftColor: authNotice.ok ? 'var(--brand2)' : 'var(--danger)' }}>
         <span className="dshs-cbanner-text">{authNotice.msg}</span>
+      </div>
+    ) : null,
+    data?.syncError ? (
+      <div key="syncerr" className="dshs-cbanner" style={{ borderLeftColor: 'var(--danger)' }}>
+        <span className="dshs-cbanner-text">❌ 数据同步失败：{data.syncError}</span>
+        <span className="dshs-cbanner-actions">
+          <button className="dshs-abtn" disabled={syncRetrying} onClick={retrySync}>
+            {syncRetrying ? '⏳ 重新同步中…' : '🔄 重试'}
+          </button>
+        </span>
+      </div>
+    ) : data?.syncing && tabDataEmpty ? (
+      // 真正在联网加载、且当前页数据尚为空时提示（加载完自动消失；数据本就为空的常态不提示）
+      <div key="connecting" className="dshs-cbanner" style={{ borderLeftColor: 'var(--brand2)' }}>
+        <span className="dshs-cbanner-text">🔄 正在连接 DSH 商店服务器，同步{tabDataLabel}数据中…</span>
       </div>
     ) : null,
     <div className="dshs-tabs" key="tabs">{tabBtns}</div>,
@@ -781,17 +834,35 @@ export function StoreApp(props: {
         </div>
       ) : null,
       <div className="dshs-body" key="skeleton">
-        <div className="dshs-sec">
-          🔄 正在同步插件库
-          <span>首次拉取可能需要几十秒，完成后自动显示</span>
-        </div>
-        <div className="dshs-empty">
-          <div style={{ fontSize: 26, marginBottom: 8 }}>🧩</div>
-          正在连接 DSH 商店服务器…
-          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--tx2)' }}>
-            数据已在本机缓存时立即显示；同步在后台进行，之后打开面板不再重复全量拉取
-          </div>
-        </div>
+        {bootErr ? (
+          <>
+            <div className="dshs-sec">
+              ⚠️ 初始化失败
+              <span>加载提示已结束，见下方错误</span>
+            </div>
+            <div className="dshs-empty">
+              <div style={{ fontSize: 26, marginBottom: 8 }}>⚠️</div>
+              {bootErr}
+              <div style={{ marginTop: 10 }}>
+                <button className="dshs-abtn pri" onClick={() => window.location.reload()}>重新加载</button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="dshs-sec">
+              🔄 正在同步插件库
+              <span>首次拉取可能需要几十秒，完成后自动显示</span>
+            </div>
+            <div className="dshs-empty">
+              <div style={{ fontSize: 26, marginBottom: 8 }}>🧩</div>
+              正在连接 DSH 商店服务器…
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--tx2)' }}>
+                数据已在本机缓存时立即显示；同步在后台进行，之后打开面板不再重复全量拉取
+              </div>
+            </div>
+          </>
+        )}
       </div>,
     ]
     const kids = [

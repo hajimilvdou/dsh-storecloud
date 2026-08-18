@@ -45,29 +45,23 @@
 - **页内直接安装**：浏览到的插件点「安装」即执行真实的 `dsh plugin add`（pnpm 安装 + 自动入组合层），安装/卸载/已装清单实时核对本地真实状态；
 - **零依赖客户端半**：走 DSH 标准 client-modules 通道（`dsh.client` 声明），不捆绑 React、不依赖框架内部 API，随 DSH 主版本长期兼容；
 - **无缝反向代理桥**：`/dsh-store/api` 同源转发（自动携带登录态/访问口令/匿名凭证），OAuth 登录后 token 自动回传，无跨域无复制粘贴；通用转发带 SSRF 防护；
-- **源码与产物统一仓库**：`npm install && npm run build` 全链路可复现；npm 发布物只含产物（约 100 kB）。
+- **源码与产物统一仓库**：`npm install && npm run build` 全链路可复现；`npm pack` 发布产物 tarball 只含产物（约 100 kB）。
 
 ---
 
-## 一键安装（npm）
+## 一键安装
 
 ```bash
 # 方式 A：官方装配命令（推荐）——装完重启 DSH web 进程即可
-dsh plugin --profile web add dsh-storecloud
+dsh plugin --profile web add github:hajimilvdou/dsh-storecloud
 
 # 方式 B：本地 tarball / git 仓库
 dsh plugin --profile web add ./dsh-storecloud-0.1.0.tgz
 dsh plugin --profile web add github:hajimilvdou/dsh-storecloud
-
-# 方式 C：直接 pnpm 装进 profile（等价）
-cd ~/.dsh/profiles/web && pnpm add dsh-storecloud
 ```
 
-装完 **重启 DSH web 进程**（bundle 层在启动时装配）。重启后：设置页出现「🧩 插件商城」区块；会话头部出现「🧩 插件商城」视图（排最右）。
-
-卸载：`dsh plugin --profile web remove dsh-storecloud`
-
-> ⚠️ Windows 注意：tarball/目录路径含空格时 `dsh plugin add` 的 cmd 拼接会失败，请用不含空格的路径（npm 包名安装不受影响）。
+> ⚠️ 安装地址为 `github:` 源（或本地 tarball）；**尚未发布到 npm 官方源**，请勿使用 `dsh plugin add dsh-storecloud` 裸包名（npm 安装会失败）。
+> ⚠️ Windows 注意：tarball/目录路径含空格时 `dsh plugin add` 的 cmd 拼接会失败，请用不含空格的路径。
 
 ---
 
@@ -131,7 +125,7 @@ dsh-storecloud/
 └── preview-server.mjs       # 本地预览服务器
 ```
 
-**npm 发布物（tarball）只含产物**（`files` 白名单）；**GitHub 仓库含全部源码**，随时可重新构建。
+**发布产物 tarball（`npm pack`）只含产物**（`files` 白名单）；**GitHub 仓库含全部源码**，随时可重新构建。
 
 ---
 

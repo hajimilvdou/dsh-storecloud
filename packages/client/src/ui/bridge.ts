@@ -51,6 +51,10 @@ export interface StoreState {
   trendingSize: number
   /** 功能开关(管理端配置中心下发)：趋势榜/组合/公告。 */
   features: { trending: boolean; combos: boolean; announcements: boolean }
+  /** 最近一次数据同步结果：null=成功；非空=失败原因（界面显示横幅 + 重试）。 */
+  syncError: string | null
+  /** 是否正在联网同步（load 进行中）：用于"正在连接"横幅的显示时机。 */
+  syncing: boolean
   /**
    * 客户端插件真实安装版本：优先来自 host 半 /version RPC（读已装包 package.json，git/npm/tgz
    * 安装都准确）；RPC 不可用时回落构建注入的 DSH_STORE_VERSION。更新判断以它为准。
@@ -66,6 +70,9 @@ export const CLIENT_PLUGIN_VERSION = DSH_STORE_VERSION
 
 export interface StoreBridge {
   bootstrap(): Promise<StoreState>
+  /** 仅本机快速恢复（读缓存/台账，不联网、不启动后台同步）：预览首帧秒开用，
+   *  毫秒级返回，避免进商城黑屏；后续由 bootstrap() 补全/启动后台同步。 */
+  bootstrapLocal(): Promise<StoreState>
   /** 强制重拉服务端数据（周期心跳用；与 bootstrap 结果同构）。 */
   refresh(): Promise<StoreState>
   /**
@@ -144,6 +151,58 @@ export function agentInstalledKey(a: Plugin, installed: Record<string, string>):
     if (installed[k]) return k
   }
   return null
+}
+
+/** 缓存压缩（保留完整字段，解决全量数据超 localStorage 配额）：
+ *  gzip 压缩后 base64 存储，`gz:` 前缀标记。
+ *  环境适配：浏览器(CompressionStream) / 打包应用端(Chromium/WebKit WebView 也有) /
+ *  老内核或无 web API 的 Node 壳（无 Blob/Response/CompressionStream）→ 自动检测并回落原始 JSON。
+ *  任一环节失败都不抛错、不阻塞会话，仅本次不写入缓存。 */
+function hasWebCompression(): boolean {
+  try {
+    if (typeof CompressionStream !== 'function' || typeof DecompressionStream !== 'function') return false
+    // 试跑一次，确保 Blob/Response 管道在宿主环境可用（打包端裁剪内核可能只拆其一）
+    const c = new CompressionStream('gzip')
+    void new Blob([]).stream().pipeThrough(c)
+    return true
+  } catch {
+    return false
+  }
+}
+function toBase64(u8: Uint8Array): string {
+  let bin = ''
+  const CH = 0x8000
+  for (let i = 0; i < u8.length; i += CH) bin += String.fromCharCode(...Array.from(u8.subarray(i, i + CH)))
+  if (typeof btoa === 'function') return btoa(bin)
+  const buf = (globalThis as { Buffer?: { from: (s: string, enc: string) => { toString: (e: string) => string } } }).Buffer
+  if (buf && typeof buf.from === 'function') return buf.from(bin, 'binary').toString('base64')
+  throw new Error('base64 unsupported')
+}
+function fromBase64(s: string): string {
+  if (typeof atob === 'function') return atob(s)
+  const buf = (globalThis as { Buffer?: { from: (s: string, enc: 'base64') => { toString: (e: 'latin1') => string } } }).Buffer
+  if (buf && typeof buf.from === 'function') return buf.from(s, 'base64').toString('latin1')
+  throw new Error('base64 unsupported')
+}
+async function cacheCompress(s: string): Promise<string> {
+  if (!hasWebCompression()) return s
+  try {
+    const stream = new Blob([s]).stream().pipeThrough(new CompressionStream('gzip'))
+    const buf = new Uint8Array(await new Response(stream).arrayBuffer())
+    return 'gz:' + toBase64(buf)
+  } catch {
+    return s
+  }
+}
+async function cacheDecompress(raw: string): Promise<string> {
+  if (!raw.startsWith('gz:')) return raw
+  if (!hasWebCompression()) return raw
+  try {
+    const bytes = Uint8Array.from(fromBase64(raw.slice(3)), (c) => c.charCodeAt(0))
+    return await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+  } catch {
+    return raw
+  }
 }
 
 /** 内存 KV 存储（mock 用）。 */
@@ -250,12 +309,18 @@ export function mockBridge(): StoreBridge {
     comboReviewEnabled,
     trendingSize,
     features,
+    syncError: null,
+    syncing: false,
   })
 
   return {
     async bootstrap() {
       ready ??= load()
       await ready
+      return state()
+    },
+    async bootstrapLocal() {
+      await ledger.load()
       return state()
     },
     async refresh() {
@@ -499,7 +564,7 @@ export function httpBridge(opts: {
   const SOURCE_KEY = 'dsh-store:http:sources:v1'
   const PRIMARY_KEY = 'dsh-store:http:primary:v1'
   const ANNO_DISMISS_KEY = 'dsh-store:http:annos-dismissed:v1'
-  const CACHE_KEY = 'dsh-store:http:cache:v1'
+  const CACHE_KEY = 'dsh-store:http:cache:v3'
   /** 已删除（本地隐藏）的公告 id：服务器没有逐用户公告状态接口，删除 = 本机持久隐藏。 */
   const dismissedAnnos = new Set<string>()
   let annosRestored = false
@@ -994,7 +1059,7 @@ export function httpBridge(opts: {
     try {
       const raw = await opts.sourceStore.get(CACHE_KEY)
       if (!raw) return
-      const c = JSON.parse(raw) as CacheShape
+      const c = JSON.parse(await cacheDecompress(raw)) as CacheShape
       if (!Array.isArray(c.plugins) || !Array.isArray(c.combos)) return
       plugins = c.plugins
       combos = c.combos
@@ -1011,28 +1076,29 @@ export function httpBridge(opts: {
     }
   }
 
-  /** 持久化当前全量数据 + revision（下次打开秒开，后台增量）。 */
+  /** 持久化当前全量数据 + revision（下次打开秒开，后台增量）。
+   *  直接存完整数据会超 localStorage 配额（6022 条 JSON ≈3.7MB）→ 用 gzip 压缩后写入，
+   *  保留全部字段内容（插件信息不裁剪、不缺失）。 */
   const writeCache = async (): Promise<void> => {
     if (!opts.sourceStore) return
     try {
-      await opts.sourceStore.set(
-        CACHE_KEY,
-        JSON.stringify({
-          plugins,
-          combos,
-          announcements,
-          pluginsRevision,
-          combosRevision,
-          clientPlugin,
-          heartbeatMin,
-          comboLimit,
-          comboReviewEnabled,
-          trendingSize,
-          ts: Date.now(),
-        }),
-      )
-    } catch {
-      /* 持久化失败不影响本次会话 */
+      const payload = JSON.stringify({
+        plugins,
+        combos,
+        announcements,
+        pluginsRevision,
+        combosRevision,
+        clientPlugin,
+        heartbeatMin,
+        comboLimit,
+        comboReviewEnabled,
+        trendingSize,
+        ts: Date.now(),
+      })
+      await opts.sourceStore.set(CACHE_KEY, await cacheCompress(payload))
+    } catch (e) {
+      /* 持久化失败不影响本次会话（后台仍全量同步）；控制台可见原因便于排查 */
+      console.warn('[dsh-store] 本地缓存写入失败', String((e as Error)?.message ?? e))
     }
   }
 
@@ -1089,12 +1155,19 @@ export function httpBridge(opts: {
    * 3. 在线 → 数据通道（插件/组合/公告/节点）并行拉取（各接口自带失败兜底，互不影响）；
    * 4. manifest 探测离线 → 保留缓存数据，只更新源健康状态。
    */
+  // 最近一次同步结果（给界面横幅：成功=null / 失败=原因）。加载兜底：load 不再静默吞错。
+  let syncError: string | null = null
+  /** 是否正在联网同步（load 进行中）：连接横幅只在 syncing && 当前页数据为空时显示，
+   *  完成后消失——避免"数据本来为空"的常态化横幅。 */
+  let syncing = false
   const load = async () => {
-    await restoreSources()
-    await readCache()
-    if (opts.sourceStore && !annosRestored) {
-      annosRestored = true
-      try {
+    syncing = true
+    try {
+      await restoreSources()
+      await readCache()
+      if (opts.sourceStore && !annosRestored) {
+        annosRestored = true
+        try {
         const raw = await opts.sourceStore.get(ANNO_DISMISS_KEY)
         if (raw) {
           const list = JSON.parse(raw) as string[]
@@ -1114,6 +1187,7 @@ export function httpBridge(opts: {
     // manifest 拉取失败（fallback software_version=0.0.0）视为离线：保留缓存数据。
     const offline = m.software_version === '0.0.0'
     if (!offline) {
+      syncError = null
       clientPlugin = m.client_plugin ?? null
       heartbeatMin = m.client_config?.data_heartbeat_min ?? 30
       comboLimit = m.client_config?.combo_limit ?? 3
@@ -1145,7 +1219,12 @@ export function httpBridge(opts: {
       if (!(ps.full && ps.items.length === 0 && ps.revision === '0')) {
         plugins = applyDelta(plugins, ps)
         pluginsRevision = ps.revision !== '0' ? ps.revision : m.plugins_revision
+      } else {
+        // 插件库拉取失败：保留缓存但明确提示（界面横幅 + 重试）
+        syncError = `插件库同步失败（${activeBase} 响应异常），已显示本地缓存数据`
       }
+    } else {
+      syncError = activeBase ? `无法连接服务器（${activeBase}）` : '无法连接服务器'
     }
     sources = mergeSources()
     await fetchCloud()
@@ -1153,6 +1232,11 @@ export function httpBridge(opts: {
     await fetchRealInstalled()
     await writeCache()
     startEvents()
+    } catch (err) {
+      // 兜底：任何未捕获异常都转为可见的同步失败原因（绝不静默）
+      syncError = `数据同步失败：${String((err as Error)?.message ?? err)}`
+    }
+    syncing = false
   }
 
   /** 组合配额已用数：组合列表中作者匹配当前登录账号的数量（含软删占位，与服务端配额口径一致）。 */
@@ -1197,6 +1281,8 @@ export function httpBridge(opts: {
       comboReviewEnabled,
       trendingSize,
       features,
+      syncError,
+      syncing,
     }
   }
 
@@ -1271,12 +1357,23 @@ export function httpBridge(opts: {
      * 完成后通过 subscribe 通知 UI 刷新。
      */
     async bootstrap() {
-      // 先恢复本地自定义源/主源（幂等），让"我的 → 服务器源"立即有数据。
-      await restoreSources()
-      await readCache()
-      await restoreSubs()
-      // 真实安装版本（本地 RPC，快）：更新判断以实际安装的包版本为准
-      await fetchClientVersion()
+      // 任一本地恢复步骤失败都不致命：捕获后降级继续，保证本 Promise 必 resolve，
+      // 上层骨架态（"正在同步插件库"）绝不会因异常而卡死不消失。
+      try {
+        // 先恢复本地自定义源/主源（幂等），让"我的 → 服务器源"立即有数据。
+        await restoreSources()
+        await readCache()
+        // 本地台账 + 真实已装清单必须先在秒开阶段就绪：
+        // 否则 iframe 每次重建（从商城切出去再回来）返回的 state() 里 installed 为空，
+        // 已安装插件/组合成员/Agent 列表会短暂消失，直到后台 load() 拉完才重新出现。
+        await ledger.load()
+        await fetchRealInstalled()
+        await restoreSubs()
+        // 真实安装版本（本地 RPC，快）：更新判断以实际安装的包版本为准
+        await fetchClientVersion()
+      } catch {
+        /* 数据损坏/本地存储异常：保留当前内存状态，后台 load 仍会尽力同步 */
+      }
       // 乐观登录恢复：本地存在可解码的 token 即先恢复登录态（iframe 重建/切页回来不闪烁、不掉线），
       // 后台 load 会向服务器校验；只有服务器明确 401/403 才真正登出并清 token。
       if (!authValid) {
@@ -1290,6 +1387,17 @@ export function httpBridge(opts: {
         loadPromise = load()
           .then(notify)
           .catch(() => {})
+      }
+      return state()
+    },
+    /** 仅本机恢复（读缓存/台账，不联网、不启动后台同步）：预览首帧秒开、避免黑屏。 */
+    async bootstrapLocal() {
+      try {
+        await restoreSources()
+        await readCache()
+        await ledger.load()
+      } catch {
+        /* 忽略：仅尽力恢复 */
       }
       return state()
     },
