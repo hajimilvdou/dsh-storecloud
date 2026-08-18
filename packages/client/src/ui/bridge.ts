@@ -900,13 +900,15 @@ export function httpBridge(opts: {
       cloud = { plugins: [], combos: [], agents: [] }
       return cloud
     }
-    // 上传"有效已装"（本地台账 + 真实已装合并）：CLI/其他方式安装的插件也会一并上传，
-    // 不再出现"本地装了插件、上传却显示 0 个"的问题。
-    const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = Object.entries(effectiveInstalled()).map(([target, version]) => ({
-      target,
-      type: 'plugin',
-      version,
-    }))
+    // 上传"有效已装"中的【已收录于插件库】的插件：库外插件其他地方无法下载安装，
+    // 上传云端无意义，故过滤掉（用户可先发布/上报入库后再同步）。
+    const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = Object.entries(effectiveInstalled())
+      .filter(([target]) => plugins.some((p) => p.id === target))
+      .map(([target, version]) => ({
+        target,
+        type: 'plugin',
+        version,
+      }))
     for (const c of Object.keys(subscriptions)) body.push({ target: c, type: 'combo', version: '1' })
     // Agent：已装（多键匹配）的 preset 条目按市场 id 上传，恢复时以 id 定位
     const installedKeys = Object.keys(effectiveInstalled())
@@ -919,12 +921,14 @@ export function httpBridge(opts: {
     return putInstalls(body)
   }
 
-  /** 手动挑选上传：云端已有 ∪ 勾选新增（服务端全量替换，必须合并），未勾选的本地项不进云端。 */
+  /** 手动挑选上传：云端已有 ∪ 勾选新增（服务端全量替换，必须合并），未勾选的本地项不进云端。
+   *  仅接受插件库已收录的插件（库外无法在其他设备安装，上传无意义；顺带清掉云端历史库外项）。 */
   const uploadSelected = async (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }): Promise<CloudList> => {
     const t = currentToken()
     if (!t) throw new Error('请先登录 GitHub 后再上传云端')
+    const inLib = (id: string): boolean => plugins.some((p) => p.id === id)
     const body: Array<{ target: string; type: 'plugin' | 'combo' | 'agent'; version: string }> = []
-    const pset = new Set([...cloud.plugins, ...(scope.plugins ?? [])])
+    const pset = new Set([...cloud.plugins, ...(scope.plugins ?? [])].filter(inLib))
     for (const p of pset) body.push({ target: p, type: 'plugin', version: latestVersion(plugins, p) || '1.0.0' })
     const cset = new Set([...cloud.combos, ...(scope.combos ?? [])])
     for (const c of cset) body.push({ target: c, type: 'combo', version: '1' })

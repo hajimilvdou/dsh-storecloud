@@ -308,6 +308,16 @@ export function AgentLibraryView(props: {
                 props.onRestoreAgents(props.cloud.agents)
                 setCloudMsg(`已开始恢复 ${props.cloud.agents.length} 个云端 Agent`)
               }}>⚡ 全部恢复（带提醒）</button>
+              <button
+                className="dshs-abtn dan"
+                onClick={() => {
+                  if (!window.confirm(`清空云端全部 Agent（${props.cloud.agents.length} 个）？仅移除云端清单，不影响本地安装。`)) return
+                  setCloudMsg('正在清空云端 Agent…')
+                  void props.onDeleteCloud({ agents: props.cloud.agents }).then(() => setCloudMsg('已清空云端 Agent')).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
+                }}
+              >
+                🗑 删除全部
+              </button>
             </div>
             {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
             <div className="dshs-cloud-scroll">
@@ -1008,6 +1018,16 @@ export function SubscribeView(props: {
               ) : (
                 <button className="dshs-abtn" onClick={restoreAllCloud}>⚡ 全部恢复（带提醒）</button>
               )}
+              <button
+                className="dshs-abtn dan"
+                onClick={() => {
+                  if (!window.confirm(`清空云端全部组合（${props.cloud.combos.length} 个）？仅移除云端清单，不影响本地安装。`)) return
+                  setCloudMsg('正在清空云端组合…')
+                  void props.onDeleteCloud({ combos: props.cloud.combos }).then(() => setCloudMsg('已清空云端组合')).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
+                }}
+              >
+                🗑 删除全部
+              </button>
             </div>
             {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
             <div className="dshs-frow" style={{ marginTop: 8 }}>
@@ -1327,6 +1347,16 @@ export function MyView(props: {
               ) : (
                 <button className="dshs-abtn" onClick={restoreAllPlugins}>⚡ 全部恢复（带提醒）</button>
               )}
+              <button
+                className="dshs-abtn dan"
+                onClick={() => {
+                  if (!window.confirm(`清空云端全部插件（${props.cloud.plugins.length} 个）？仅移除云端清单，不影响本地安装。`)) return
+                  setCloudMsg('正在清空云端插件…')
+                  void props.onDeleteCloud({ plugins: props.cloud.plugins }).then(() => setCloudMsg('已清空云端插件')).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
+                }}
+              >
+                🗑 删除全部
+              </button>
             </div>
             {cloudMsg ? <div className="dshs-notif"><div className="nt">{cloudMsg}</div></div> : null}
             <div className="dshs-frow" style={{ marginTop: 8 }}>
