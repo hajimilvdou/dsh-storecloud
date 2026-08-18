@@ -7,8 +7,6 @@ export {
   Drawer,
   StorePanel,
   Metrics,
-  InstallButton,
-  UpdateButton,
   ZoomModal,
   AccountDrawer,
   sourceBadge,

@@ -179,29 +179,6 @@ export function Metrics(props: { p: Plugin }) {
   )
 }
 
-export function InstallButton(props: {
-  pkg: string
-  install?: string
-  installed: Record<string, string>
-  onInstall: (pkg: string) => void
-}) {
-  const spec = props.install ?? props.pkg
-  if (props.installed[props.pkg]) {
-    return <button className="dshs-ibtn done" disabled title={`已安装：dsh plugin add ${spec}`}>已安装 ✓</button>
-  }
-  return <button className="dshs-ibtn" onClick={() => props.onInstall(props.pkg)} title={`一键安装：dsh plugin add ${spec}`}>一键安装</button>
-}
-
-export function UpdateButton(props: {
-  p: Plugin
-  installed: Record<string, string>
-  onUpdate: (pkg: string) => void
-}) {
-  const iv = props.installed[props.p.id]
-  if (!iv || compare(props.p.version, iv) <= 0) return null
-  return <button className="dshs-ibtn" onClick={() => props.onUpdate(props.p.id)}>一键更新</button>
-}
-
 function compare(a: string, b: string): number {
   const n = (s: string): [number, number, number] => {
     const p = String(s || '').replace(/^v/, '').split('.')

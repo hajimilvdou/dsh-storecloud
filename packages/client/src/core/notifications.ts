@@ -25,12 +25,9 @@ export function detectPluginUpdates(
       out.push({
         id: `update:${rec.pkg}`,
         category: 'update',
-        title: `🔵 ${rec.pkg} 有更新：v${rec.version} → v${latest.version}${comboLabel}`,
+        title: `🔵 ${rec.pkg} 有更新：v${rec.version} → v${latest.version}${comboLabel}（请到插件详情 🔗 仓库按 README 手动更新）`,
         target: `plugin:${rec.pkg}`,
-        actions: [
-          { label: '一键更新', primary: true, action: `update:${rec.pkg}` },
-          { label: '稍后', action: 'ignore' },
-        ],
+        actions: [{ label: '知道了', action: 'ignore' }],
       })
     }
   }

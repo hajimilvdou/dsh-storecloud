@@ -97,6 +97,8 @@ export interface StoreBridge {
   update(pkg: string): Promise<Record<string, string>>
   installCombo(name: string): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean>; manual: ManualInstallItem[] }>
   unsubscribe(name: string): Promise<{ installed: Record<string, string>; subscriptions: Record<string, boolean> }>
+  /** 订阅组合（仅云端标记，不安装任何插件；组内插件按成员仓库链接手动下载）。 */
+  subscribeCombo(name: string): Promise<{ subscriptions: Record<string, boolean> }>
   removeAnnouncement(id: string): Promise<Announcement[]>
   addSource(url: string, password: string): Promise<ServerSource[]>
   removeSource(id: string): Promise<ServerSource[]>
@@ -421,6 +423,10 @@ export function mockBridge(): StoreBridge {
     async unsubscribe(name) {
       delete subscriptions[name]
       return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
+    },
+    async subscribeCombo(name) {
+      subscriptions[name] = true
+      return { subscriptions: { ...subscriptions } }
     },
     async removeAnnouncement(id) {
       announcements = announcements.filter((a) => a.id !== id)
@@ -1567,6 +1573,12 @@ export function httpBridge(opts: {
       await persistSubs()
       await syncCloud()
       return { installed: toInstalledMap(ledger), subscriptions: { ...subscriptions } }
+    },
+    async subscribeCombo(name) {
+      subscriptions[name] = true
+      await persistSubs()
+      await syncCloud()
+      return { subscriptions: { ...subscriptions } }
     },
     async removeAnnouncement(id) {
       dismissedAnnos.add(id)

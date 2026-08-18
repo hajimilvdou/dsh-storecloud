@@ -3,14 +3,13 @@ import type { Announcement, Combo, ServerSource } from '@dsh-store/shared'
 import { searchPlugins, sortPlugins, topTrending } from '../core/index.js'
 import type { PluginSortKey } from '../core/index.js'
 import { isUpdateAvailable } from '../core/versions.js'
-import type { AccountInfo, CloudList, ComboMemberInput, ManualInstallItem, StoreBridge, StoreState, TokenStore } from './bridge.js'
+import type { AccountInfo, CloudList, ComboMemberInput, StoreBridge, StoreState, TokenStore } from './bridge.js'
 import { CLIENT_PLUGIN_VERSION } from './bridge.js'
 import {
   AccountDrawer,
   Drawer,
   Fab,
   hasUpdate,
-  InstallNoticeModal,
   StorePanel,
   TopBar,
   ZoomModal,
@@ -104,14 +103,8 @@ export function StoreApp(props: {
   const [authUser, setAuthUser] = useState<{ login: string; name: string | null } | null>(null)
   const [pos, setPos] = useState<Pos>({ x: 26, y: 26 })
   const [serverUrl, setServerUrl] = useState<string>(props.serverUrl ?? '')
-  /** 安装前须知弹窗：首次安装弹出；勾选"不再提醒"后 localStorage 持久化跳过。 */
-  const [installNotice, setInstallNotice] = useState<{ repoUrl?: string; proceed: () => void } | null>(null)
-  /** 正在安装/更新/下载的目标集合（按钮显示"⏳ 安装中…"禁用态；最长 120s 有反馈）。 */
-  const [installing, setInstalling] = useState<Record<string, boolean>>({})
   /** GitHub 登录中（授权回传 token 后同步云端清单需要几十秒，界面显示加载提示）。 */
   const [authBusy, setAuthBusy] = useState(false)
-  /** 组合一键安装时标记为手动安装的成员：弹窗逐个打开插件页面。 */
-  const [manualList, setManualList] = useState<ManualInstallItem[] | null>(null)
   /** 放置位置能力清单(壳侧广播)：section=设置页 / header=会话头部。 */
   const [storeLocs, setStoreLocs] = useState<{ section?: boolean; header?: boolean }>({})
   /** 登录结果全局横幅（成功/失败都显示几秒后消失，任何页面可见，不依赖抽屉开关）。 */
@@ -342,75 +335,16 @@ export function StoreApp(props: {
   /** 本地台账/订阅变化后，把最新云端清单同步回「我的」界面。 */
   const refreshCloud = () => void props.bridge.pushCloud().then(setCloud)
 
-  /** 安装前须知：未勾选"不再提醒"时先弹窗，确认后执行安装动作。 */
-  const INSTALL_NOTICE_KEY = 'dsh_store_install_notice'
-  const beginInstall = (repoUrl: string | undefined, action: () => void) => {
-    try {
-      if (localStorage.getItem(INSTALL_NOTICE_KEY) === '1') {
-        action()
-        return
-      }
-    } catch {
-      /* localStorage 不可用时直接放行 */
-    }
-    setInstallNotice({ repoUrl, proceed: action })
-  }
+  /** 安装前须知（已随"用户端去安装化"移除：安装/卸载/更新/恢复入口全部下线）。 */
 
-  /** 执行安装类操作并标记按钮"安装中…"（无论成功/失败都清除标记）。 */
-  const runInstalling = <T,>(key: string, fn: () => Promise<T>): Promise<T> => {
-    setInstalling((prev) => ({ ...prev, [key]: true }))
-    return fn().finally(() => {
-      setInstalling((prev) => {
-        const next = { ...prev }
-        delete next[key]
-        return next
-      })
-    })
-  }
-
-  const doInstall = (pkg: string) => {
-    const p = plugins.find((x) => x.id === pkg)
-    beginInstall(p?.repo_url, () =>
-      void runInstalling(pkg, () => props.bridge.install(pkg)).then((r) => {
-        setInstalled(r)
-        if (loggedIn) refreshCloud()
-      }).catch(function (e) { window.alert(String((e && e.message) || e)) }),
-    )
-  }
-  const doInstallPreset = (pkg: string, presetName?: string) => {
-    const p = plugins.find((x) => x.id === pkg)
-    beginInstall(p?.repo_url, () =>
-      void runInstalling(pkg, () => props.bridge.installPreset(pkg, presetName)).then((r) => {
-        setInstalled(r)
-        if (loggedIn) refreshCloud()
-      }).catch(function (e) { window.alert(String((e && e.message) || e)) }),
-    )
-  }
-  const doUninstall = (pkg: string) =>
-    void props.bridge.uninstall(pkg).then((r) => {
-      setInstalled(r)
-      if (loggedIn) refreshCloud()
-    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
-  const doUpdate = (pkg: string) =>
-    void runInstalling(pkg, () => props.bridge.update(pkg)).then((r) => {
-      setInstalled(r)
-      if (loggedIn) refreshCloud()
-      void props.bridge.ackUpdate(pkg).then(setAcked)
-    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
-  const doInstallCombo = (name: string) =>
-    beginInstall(undefined, () =>
-      void runInstalling('combo:' + name, () => props.bridge.installCombo(name)).then((r) => {
-        setInstalled(r.installed)
-        setSubscriptions(r.subscriptions)
-        if (r.manual && r.manual.length > 0) {
-          // 手动安装成员：自动装的部分已完成,弹窗逐个打开插件页面
-          setManualList(r.manual)
-        }
-        if (loggedIn) refreshCloud()
-      }).catch(function (e) { window.alert(String((e && e.message) || e)) }),
-    )
   const doUnsubscribe = (name: string) =>
     void props.bridge.unsubscribe(name).then((r) => {
+      setSubscriptions(r.subscriptions)
+      if (loggedIn) refreshCloud()
+    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
+  /** 订阅组合 = 仅云端标记，不安装任何插件（成员按仓库链接手动下载）。 */
+  const doSubscribe = (name: string) =>
+    void props.bridge.subscribeCombo(name).then((r) => {
       setSubscriptions(r.subscriptions)
       if (loggedIn) refreshCloud()
     }).catch(function (e) { window.alert(String((e && e.message) || e)) })
@@ -465,23 +399,6 @@ export function StoreApp(props: {
       }
       return r
     })
-  const doRestorePlugins = (plugins: string[]) =>
-    void runInstalling('restore', () => props.bridge.restorePlugins(plugins)).then((r) => {
-      setInstalled(r.installed)
-      setSubscriptions(r.subscriptions)
-      if (loggedIn) refreshCloud()
-    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
-  const doRestoreSubs = (combos: string[]) =>
-    void runInstalling('restore', () => props.bridge.restoreSubscriptions(combos)).then((r) => {
-      setInstalled(r.installed)
-      setSubscriptions(r.subscriptions)
-      if (loggedIn) refreshCloud()
-    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
-  const doRestoreAgents = (ids: string[]) =>
-    void runInstalling('restore', () => props.bridge.restoreAgents(ids)).then((r) => {
-      setInstalled(r.installed)
-      if (loggedIn) refreshCloud()
-    }).catch(function (e) { window.alert(String((e && e.message) || e)) })
   const doAckAll = () => void props.bridge.ackAll().then(setAcked)
   const doAddSource = (url: string, password: string) => props.bridge.addSource(url, password).then(setSources)
   const doRemoveSource = (id: string) => void props.bridge.removeSource(id).then(setSources)
@@ -556,7 +473,7 @@ export function StoreApp(props: {
 
   const body =
     tab === 'plugin' ? (
-      <SearchView trending={trending} results={results} query={debouncedQuery} installed={installed} sort={sort} loggedIn={loggedIn} installing={installing} onSort={setSort} onInstall={doInstall} onInstallPreset={doInstallPreset} onUpdate={doUpdate} onPublish={() => setPublish(true)} onOpenAccount={() => setAcct(true)} />
+      <SearchView trending={trending} results={results} query={debouncedQuery} installed={installed} sort={sort} loggedIn={loggedIn} onSort={setSort} onPublish={() => setPublish(true)} onOpenAccount={() => setAcct(true)} />
     ) : tab === 'combo' ? (
       <ComboView
         combos={combos}
@@ -566,31 +483,26 @@ export function StoreApp(props: {
         loggedIn={loggedIn}
         myLogin={authUser?.login || account?.login || ''}
         query={debouncedQuery}
-        installing={installing}
         onLogin={() => setAcct(true)}
-        onInstallCombo={doInstallCombo}
-        onInstallPlugin={doInstall}
         onAddCombo={doAddCombo}
         onUpdateCombo={doUpdateCombo}
         onRemoveCombo={doRemoveCombo}
+        onSubscribe={doSubscribe}
+        onUnsubscribe={doUnsubscribe}
         reviewEnabled={data ? data.comboReviewEnabled !== false : true}
       />
     ) : tab === 'agent' ? (
-      <AgentView agents={agents} installed={installed} query={debouncedQuery} installing={installing} onInstallPreset={doInstallPreset} />
+      <AgentView agents={agents} installed={installed} query={debouncedQuery} />
     ) : tab === 'my' ? (
       <MyView
         plugins={plugins}
         installed={installed}
         acked={acked}
         cloud={cloud}
-        installing={installing}
         onPushCloud={doPushCloud}
         onRefreshCloud={doRefreshCloud}
-        onRestorePlugins={doRestorePlugins}
         onUploadSelected={doUploadSelected}
         onDeleteCloud={doDeleteCloud}
-        onUpdate={doUpdate}
-        onUninstall={doUninstall}
         onAckAll={doAckAll}
       />
     ) : tab === 'sub' ? (
@@ -600,14 +512,10 @@ export function StoreApp(props: {
         installed={installed}
         plugins={plugins}
         cloud={cloud}
-        installing={installing}
-        onInstallCombo={doInstallCombo}
-        onInstallPlugin={doInstall}
-        onUpdate={doUpdate}
+        onSubscribe={doSubscribe}
         onUnsubscribe={doUnsubscribe}
         onPushCloud={doPushCloud}
         onRefreshCloud={doRefreshCloud}
-        onRestoreSubs={doRestoreSubs}
         onUploadSelected={doUploadSelected}
         onDeleteCloud={doDeleteCloud}
       />
@@ -616,13 +524,9 @@ export function StoreApp(props: {
         agents={agents}
         installed={installed}
         cloud={cloud}
-        installing={installing}
-        onInstallPreset={doInstallPreset}
-        onUninstall={doUninstall}
         onGoMarket={() => setTab('agent')}
         onPushCloud={doPushCloud}
         onRefreshCloud={doRefreshCloud}
-        onRestoreAgents={doRestoreAgents}
         onUploadSelected={doUploadSelected}
         onDeleteCloud={doDeleteCloud}
       />
@@ -768,51 +672,6 @@ export function StoreApp(props: {
       : open ? <StorePanel key="panel" geo={geo} onBegin={beginDrag}>{panelKids}</StorePanel> : null,
     zoomed ? <ZoomModal key="zoom" a={zoomed} onClose={() => setZoomed(null)} /> : null,
     publish ? <PublishPluginView key="publish" loggedIn={loggedIn} plugins={plugins} onClose={() => setPublish(false)} onLogin={() => setAcct(true)} onReport={doReport} /> : null,
-    installNotice ? (
-      <InstallNoticeModal
-        key="notice"
-        repoUrl={installNotice.repoUrl}
-        onConfirm={(neverAgain) => {
-          if (neverAgain) {
-            try {
-              localStorage.setItem(INSTALL_NOTICE_KEY, '1')
-            } catch {
-              /* 持久化失败不影响本次 */
-            }
-          }
-          const proceed = installNotice.proceed
-          setInstallNotice(null)
-          proceed()
-        }}
-        onCancel={() => setInstallNotice(null)}
-      />
-    ) : null,
-    // 手动安装成员弹窗：组合中标记 ✋ 手动的插件逐个打开页面安装
-    manualList && manualList.length > 0 ? (
-      <div key="manual" className="dshs-modal" onClick={() => setManualList(null)}>
-        <div className="dshs-modal-card" onClick={(e) => e.stopPropagation()}>
-          <div className="t">
-            🤲 需要手动安装的插件
-            <button onClick={() => setManualList(null)}>✕</button>
-          </div>
-          <div className="c">
-            <div className="dshs-subnote" style={{ marginBottom: 8 }}>
-              组内其他插件已自动安装完成。以下插件在组合中标记为<strong>手动安装</strong>，请逐个打开插件页面按说明安装，装完回到「插件库」确认。
-            </div>
-            {manualList.map((m) => (
-              <div className="dshs-mem" key={m.pkg}>
-                <span className="dshs-nm" style={{ fontWeight: 600 }}>{m.name}</span>
-                <span className="dshs-compat">{m.pkg}</span>
-                <a className="dshs-abtn" href={m.url} target="_blank" rel="noopener noreferrer">打开页面 ↗</a>
-              </div>
-            ))}
-          </div>
-          <div className="dshs-modal-foot">
-            <button className="dshs-ibtn" onClick={() => setManualList(null)}>我知道了</button>
-          </div>
-        </div>
-      </div>
-    ) : null,
   ]
 
   // 数据未就绪（首次加载/后台同步中）：显示界面骨架，不黑屏、不整页等待。

@@ -2,30 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import type { Combo, Plugin } from '@dsh-store/shared'
 import type { PluginSortKey } from '../core/index.js'
 import { agentInstalledKey, type CloudList, type ComboMemberInput } from './bridge.js'
-import { BatchDeleteBar, ConfirmDelete, Desc, hasUpdate, installHint, Metrics, sourceBadge, srcLink, typeBadge } from './components.js'
+import { BatchDeleteBar, ConfirmDelete, Desc, hasUpdate, Metrics, sourceBadge, srcLink, typeBadge } from './components.js'
 
 type Installed = Record<string, string>
 
-/** 安装按钮：Plugin 走 dsh plugin add；Agent(Preset) 走复制安装；只有 Plugin 参与版本更新。 */
-function pluginBtn(
-  p: Plugin,
-  installed: Installed,
-  installing: Record<string, boolean>,
-  onInstall: (pkg: string) => void,
-  onInstallPreset: (pkg: string, presetName?: string) => void,
-  onUpdate: (pkg: string) => void,
-) {
-  const busy = installing[p.id]
-  const isPreset = p.kind === 'preset'
-  const presetName = p.preset_name ?? p.name
-  if (busy) return <button className="dshs-ibtn" disabled>⏳ 安装中…</button>
-  if (!installed[p.id]) {
-    return isPreset
-      ? <button className="dshs-ibtn" onClick={() => onInstallPreset(p.id, presetName)} title={installHint(p)}>安装 Agent</button>
-      : <button className="dshs-ibtn" onClick={() => onInstall(p.id)} title={installHint(p)}>一键安装</button>
-  }
-  if (!isPreset && hasUpdate(p, installed)) return <button className="dshs-ibtn" onClick={() => onUpdate(p.id)} title={`更新：dsh plugin add ${p.install ?? p.id}@${p.version}`}>更新</button>
-  return <button className="dshs-ibtn done" disabled title={isPreset ? installHint(p) : `已安装：dsh plugin add ${p.install ?? p.id}`}>已安装 ✓</button>
+/** 安装/更新入口已下线（用户端去安装化）：一律跳转仓库按 README 手动安装；预留一键上架接口。 */
+function pluginRepoLink(p?: Plugin | null) {
+  const url = (p && (p.repo_url || (p.repo ? `https://github.com/${p.repo}` : ''))) || ''
+  if (!url) return null
+  return (
+    <a className="dshs-abtn" href={url} target="_blank" rel="noopener noreferrer" title="去仓库按 README 手动安装（一键安装已下线）">
+      🔗 仓库
+    </a>
+  )
 }
 
 /** 插件页：趋势横滑 + 本地搜索 + 排序 + 列表；订阅组内插件有更新也在此显示。 */
@@ -36,11 +25,7 @@ export function SearchView(props: {
   installed: Installed
   sort: PluginSortKey
   loggedIn: boolean
-  installing: Record<string, boolean>
   onSort: (k: PluginSortKey) => void
-  onInstall: (pkg: string) => void
-  onInstallPreset: (pkg: string, presetName?: string) => void
-  onUpdate: (pkg: string) => void
   onPublish: () => void
   onOpenAccount: () => void
 }) {
@@ -68,7 +53,7 @@ export function SearchView(props: {
               <Metrics p={p} />
               <div className="dshs-mrow">
                 {srcLink(p)}
-                {pluginBtn(p, props.installed, props.installing, props.onInstall, props.onInstallPreset, props.onUpdate)}
+                {pluginRepoLink(p)}
               </div>
             </div>
           ))}
@@ -116,7 +101,7 @@ export function SearchView(props: {
                 <Desc text={p.description} style={{ margin: '5px 0 7px' }} />
                 <Metrics p={p} />
                 <div className="dshs-mrow" style={{ marginTop: 7 }}>
-                  {pluginBtn(p, props.installed, props.installing, props.onInstall, props.onInstallPreset, props.onUpdate)}
+                  {pluginRepoLink(p)}
                 </div>
               </div>
             )
@@ -158,8 +143,6 @@ export function AgentView(props: {
   installed: Installed
   /** 顶部全局搜索词（在 Agent 页同样生效）。 */
   query: string
-  installing: Record<string, boolean>
-  onInstallPreset: (pkg: string, presetName?: string) => void
 }) {
   const [q, setQ] = useState('')
   const localKw = q.trim().toLowerCase()
@@ -216,16 +199,13 @@ export function AgentView(props: {
               <div className="dshs-mrow" style={{ marginTop: 7 }}>
                 {(() => {
                   const iv = keyOf.get(a.id) ? props.installed[keyOf.get(a.id) as string] : null
-                  return props.installing[a.id] ? (
-                    <button className="dshs-ibtn" disabled>⏳ 安装中…</button>
-                  ) : !iv ? (
-                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>安装 Agent</button>
-                  ) : iv !== a.version ? (
-                    <button className="dshs-ibtn" onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>更新 Agent</button>
+                  return iv ? (
+                    <span className="dshs-pill primary">已装 v{iv}{a.version && iv !== a.version ? ` → 有更新 v${a.version}` : ''}</span>
                   ) : (
-                    <button className="dshs-ibtn done" disabled>已安装 ✓</button>
+                    <span className="dshs-pill off">未安装（点下方 🔗 仓库手动安装）</span>
                   )
                 })()}
+                {pluginRepoLink(a)}
               </div>
             </div>
           ))}
@@ -249,20 +229,15 @@ export function AgentLibraryView(props: {
   agents: Plugin[]
   installed: Installed
   cloud: CloudList
-  installing: Record<string, boolean>
-  onInstallPreset: (pkg: string, presetName?: string) => void
-  onUninstall: (pkg: string) => void
   onGoMarket: () => void
   onPushCloud: () => Promise<CloudList>
   onRefreshCloud: () => Promise<CloudList>
-  onRestoreAgents: (ids: string[]) => void
   /** 手动挑选上传 Agent（云端已有 + 勾选新增）。 */
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
   /** 从云端删除指定项（仅云端清单，不动本地安装）。 */
   onDeleteCloud: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
 }) {
   const [q, setQ] = useState('')
-  const [uninstallSelected, setUninstallSelected] = useState<Record<string, boolean>>({})
   const [cloudOpen, setCloudOpen] = useState(false)
   const [cloudMsg, setCloudMsg] = useState<string | null>(null)
   const [agentSel, setAgentSel] = useState<Record<string, boolean>>({})
@@ -276,8 +251,6 @@ export function AgentLibraryView(props: {
     if (keyOf.get(a.id) === null || keyOf.get(a.id) === undefined) return false
     return !kw || a.name.toLowerCase().includes(kw) || a.id.toLowerCase().includes(kw) || (a.preset_name ?? '').toLowerCase().includes(kw)
   })
-  // 与「已安装插件」显示机制对齐：多选 + 批量删除条
-  const selectedUninstall = entries.filter((a) => uninstallSelected[a.id]).map((a) => a.id)
   const updates = entries.filter((a) => {
     const k = keyOf.get(a.id)
     return k !== null && k !== undefined && props.installed[k] !== a.version
@@ -293,21 +266,10 @@ export function AgentLibraryView(props: {
         </div>
         {cloudOpen ? (
           <div className="dshs-cloudcard-body">
-            <div className="dshs-subnote">云端保存的是你手动上传的 Agent 清单（不自动同步）。勾选后「恢复所选」；已安装的会自动跳过。</div>
+            <div className="dshs-subnote">云端保存的是你手动上传的 Agent 清单（不自动同步）。需要使用时请点条目上的 🔗 仓库链接，到仓库按 README 手动安装。</div>
             <div className="dshs-actions" style={{ marginTop: 6 }}>
               <button className="dshs-abtn" onClick={() => { if (!window.confirm('上传全部到云端：云端清单将覆盖为本地全部已装/已订阅项。确定？')) return; setCloudMsg('正在上传本地到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>☁ 上传全部到云端</button>
               <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length} · Agent ${c.agents.length}`)) }}>↻ 从云端刷新</button>
-              <button className="dshs-abtn pri" onClick={() => {
-                const ids = props.cloud.agents.filter((a) => agentSel[a])
-                props.onRestoreAgents(ids)
-                setCloudMsg(`已开始恢复 ${ids.length} 个云端 Agent`)
-              }}>恢复所选</button>
-              <button className="dshs-abtn" onClick={() => {
-                const ok = window.confirm('⚠️ 一键全部恢复会复制所有云端 Agent 的预设目录到 ~/.dsh/.agent-presets/。部分 Agent 结构特殊可能导致失败，建议优先用「恢复所选」。')
-                if (!ok) return
-                props.onRestoreAgents(props.cloud.agents)
-                setCloudMsg(`已开始恢复 ${props.cloud.agents.length} 个云端 Agent`)
-              }}>⚡ 全部恢复（带提醒）</button>
               <button
                 className="dshs-abtn dan"
                 onClick={() => {
@@ -326,19 +288,15 @@ export function AgentLibraryView(props: {
                   const a = props.agents.find((x) => x.id === id)
                   const iv = a ? agentInstalledKey(a, props.installed) : null
                   return (
-                    <div className="dshs-pick" key={id} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setAgentSel({ ...agentSel, [id]: !agentSel[id] }) }}>
-                      <input type="checkbox" checked={!!agentSel[id]} onChange={() => setAgentSel({ ...agentSel, [id]: !agentSel[id] })} />
+                    <div className="dshs-pick" key={id}>
                       <span className="dshs-nm" style={{ fontWeight: 600 }}>🤖 {a?.name ?? id}</span>
                       {a?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {a.author}</span> : null}
-                      {a?.repo_url ? (
-                        <a className="dshs-lk" href={a.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={a.repo_url}>🔗 仓库</a>
-                      ) : null}
                       {iv ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+                      {pluginRepoLink(a)}
                       <button
                         className="dshs-x"
                         title="从云端删除（不影响本地安装）"
-                        onClick={(e) => {
-                          e.stopPropagation()
+                        onClick={() => {
                           if (!window.confirm(`从云端删除 Agent「${a?.name ?? id}」？仅移除云端清单。`)) return
                           setCloudMsg('正在从云端删除…')
                           void props.onDeleteCloud({ agents: [id] }).then(() => setCloudMsg(`已从云端删除：${a?.name ?? id}`)).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
@@ -397,15 +355,6 @@ export function AgentLibraryView(props: {
         <input className="dshs-input" placeholder="搜索已安装 Agent…" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="dshs-abtn" style={{ flex: 'none' }} onClick={props.onGoMarket}>去 Agent 市场 →</button>
       </div>
-      <BatchDeleteBar
-        count={selectedUninstall.length}
-        itemName="已安装 Agent"
-        onDelete={() => {
-          selectedUninstall.forEach((id) => props.onUninstall(id))
-          setUninstallSelected({})
-        }}
-        onClear={() => setUninstallSelected({})}
-      />
       {entries.length ? (
         entries.map((a) => {
           const k = keyOf.get(a.id)
@@ -414,30 +363,23 @@ export function AgentLibraryView(props: {
           return (
             <div className="dshs-vcard" key={a.id}>
               <div className="dshs-l1">
-                <input type="checkbox" checked={!!uninstallSelected[a.id]} onChange={() => setUninstallSelected({ ...uninstallSelected, [a.id]: !uninstallSelected[a.id] })} />
                 <span className="dshs-nm">{a.name}</span>
                 {typeBadge(a)}
                 <span className="dshs-compat">preset/{a.preset_name ?? a.name}</span>
+                {a.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {a.author}</span> : null}
               </div>
               <div className="dshs-subnote" style={{ margin: '6px 0' }}>
-                {installHint(a)} · 当前版本 v{iv}
+                已安装版本 v{iv}
                 {up ? <span className="dshs-updot" style={{ marginLeft: 8 }}>有更新 v{a.version}</span> : null}
               </div>
               <div className="dshs-actions">
-                {up ? (
-                  props.installing[a.id] ? (
-                    <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
-                  ) : (
-                    <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onInstallPreset(a.id, a.preset_name ?? a.name)}>更新 Agent</button>
-                  )
-                ) : null}
-                <ConfirmDelete label="卸载" confirmText="确认卸载" onConfirm={() => props.onUninstall(a.id)} />
+                {pluginRepoLink(a)}
               </div>
             </div>
           )
         })
       ) : (
-        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已安装 Agent' : '尚未安装任何 Agent，可去 Agent 市场安装'}</div>
+        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已安装 Agent' : '尚未安装任何 Agent，去 Agent 市场查看仓库链接手动安装'}</div>
       )}
     </div>
   )
@@ -454,10 +396,9 @@ export function ComboView(props: {
   myLogin: string
   /** 顶部全局搜索词（过滤推荐组合）。 */
   query: string
-  installing: Record<string, boolean>
   onLogin: () => void
-  onInstallCombo: (name: string) => void
-  onInstallPlugin: (pkg: string) => void
+  onSubscribe: (name: string) => void
+  onUnsubscribe: (name: string) => void
   onAddCombo: (name: string, desc: string, members: ComboMemberInput[]) => void
   onUpdateCombo: (id: string, name: string, desc: string, members: ComboMemberInput[]) => void
   onRemoveCombo: (id: string) => void
@@ -470,8 +411,6 @@ export function ComboView(props: {
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
   const [sel, setSel] = useState<Record<string, boolean>>({})
-  /** 每个已选插件的安装方式：auto=一键直接装 / manual=手动安装。 */
-  const [modes, setModes] = useState<Record<string, 'auto' | 'manual'>>({})
   const [q, setQ] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [exp, setExp] = useState<Record<string, boolean>>({})
@@ -545,18 +484,14 @@ export function ComboView(props: {
       return
     }
     setEditId(null)
-    setName(''); setDesc(''); setSel({}); setModes({}); setQ(''); setErr(null)
+    setName(''); setDesc(''); setSel({}); setQ(''); setErr(null)
     setOpen(true)
   }
   const openEdit = (c: Combo) => {
     const nd: Record<string, boolean> = {}
-    const nm: Record<string, 'auto' | 'manual'> = {}
-    for (const m of c.members) {
-      nd[m.pkg] = true
-      nm[m.pkg] = m.install_mode === 'manual' ? 'manual' : 'auto'
-    }
+    for (const m of c.members) nd[m.pkg] = true
     setEditId(c.id)
-    setName(c.name); setDesc(c.description); setSel(nd); setModes(nm); setQ(''); setErr(null)
+    setName(c.name); setDesc(c.description); setSel(nd); setQ(''); setErr(null)
     setOpen(true)
   }
   const toggle = (id: string) => setSel({ ...sel, [id]: !sel[id] })
@@ -575,7 +510,8 @@ export function ComboView(props: {
       setErr(`以下插件在库中没有，请先取消勾选再发布：${missing.join('、')}`)
       return
     }
-    const members = chosen.map((pkg) => ({ pkg, install_mode: modes[pkg] === 'manual' ? 'manual' as const : 'auto' as const }))
+    // 安装方式已随降安装化移除：组合成员一律标记 auto（预留未来一键安装接口）。
+    const members = chosen.map((pkg) => ({ pkg, install_mode: 'auto' as const }))
     if (editId) props.onUpdateCombo(editId, name.trim(), desc.trim(), members)
     else props.onAddCombo(name.trim(), desc.trim(), members)
     setOpen(false)
@@ -585,13 +521,11 @@ export function ComboView(props: {
     s === 'published' ? <span className="dshs-badge of">已发布</span>
     : s === 'unpublished' ? <span className="dshs-badge ba">已下架</span>
     : <span className="dshs-badge wa">待审核</span>
-  /** 成员徽标：手动安装成员带 ✋ 标记。 */
+  /** 成员徽标：仅包名（安装方式已不再区分）。 */
   const memberBadge = (m: Combo['members'][number]) => (
-    <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} key={m.pkg} title={m.install_mode === 'manual' ? '手动安装' : '一键安装'}>
-      {m.pkg}{m.install_mode === 'manual' ? ' ✋' : ''}
-    </span>
+    <span className="dshs-badge" key={m.pkg}>{m.pkg}</span>
   )
-  /** 组合卡片底部操作行（作者视角：订阅数可见 + 修改/删除；他人视角：订阅数 + 安装）。 */
+  /** 组合卡片底部操作行（作者视角：订阅数可见 + 修改/删除；他人视角：订阅状态 + 订阅/退订）。 */
   const comboFoot = (c: Combo, isMine: boolean, sub: boolean) => (
     <div className="dshs-mrow" style={{ marginTop: 7 }}>
       <span className="dshs-lk" title="全站订阅该组合的用户数">👥 {c.subscribers ?? 0} 订阅</span>
@@ -605,10 +539,8 @@ export function ComboView(props: {
         <>
           {sub ? (
             <button className="dshs-ibtn done" disabled>已订阅 ✓</button>
-          ) : props.installing['combo:' + c.name] ? (
-            <button className="dshs-ibtn" disabled>⏳ 下载中…</button>
           ) : (
-            <button className="dshs-ibtn" onClick={() => props.onInstallCombo(c.name)}>一键下载整组</button>
+            <button className="dshs-ibtn" onClick={() => props.onSubscribe(c.name)} title="订阅 = 云端记录并在列表中跟踪，不在商城自动安装">订阅</button>
           )}
         </>
       )}
@@ -622,18 +554,13 @@ export function ComboView(props: {
         return (
           <div className="dshs-mem" key={m.pkg}>
             <span className="dshs-nm" style={{ fontWeight: 600 }}>{p?.name ?? m.pkg}</span>
-            <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '手动安装：需自行打开插件页面安装' : '一键安装'}>
-              {m.install_mode === 'manual' ? '✋ 手动' : '⚡ 自动'}
-            </span>
             {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
-            {p?.repo_url ? (
-              <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" title={p.repo_url}>🔗 仓库</a>
-            ) : null}
             {props.installed[m.pkg] ? (
               <span className="dshs-compat">已安装 v{props.installed[m.pkg]}</span>
             ) : (
-              <button className="dshs-abtn" onClick={() => props.onInstallPlugin(m.pkg)}>下载</button>
+              <span className="dshs-pill off">未安装</span>
             )}
+            {pluginRepoLink(p)}
           </div>
         )
       })}
@@ -772,11 +699,10 @@ export function ComboView(props: {
                 <button className="dshs-abtn" onClick={toggleAll}>{allChecked ? '取消全选' : '☑ 一键全选'}</button>
                 <span className="dshs-compat" style={{ marginLeft: 0 }}>已选 {chosenCount} / 库内 {props.plugins.length}</span>
               </div>
-              <div className="dshs-subnote" style={{ marginBottom: 6 }}>插件库中的插件优先展示（未安装也可选），带 👤 作者与 🔗 仓库链接；安装方式：⚡ 自动 = 一键下载直接安装；✋ 手动 = 组内其他插件直接装，该插件打开页面由你自行安装。</div>
+              <div className="dshs-subnote" style={{ marginBottom: 6 }}>插件库中的插件优先展示（未安装也可选），带 👤 作者与 🔗 仓库链接；成员安装统一走仓库手动安装（一键安装接口预留下次上架）。</div>
               {visible.length ? (
                 visible.map((it) => {
                   const on = !!sel[it.id]
-                  const mode = modes[it.id] ?? 'auto'
                   return (
                     <div
                       className={'dshs-pick' + (on ? ' on' : '')}
@@ -792,12 +718,6 @@ export function ComboView(props: {
                       {it.inLib && it.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {it.author}</span> : null}
                       {it.inLib && it.repoUrl ? (
                         <a className="dshs-lk" href={it.repoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={it.repoUrl}>🔗 仓库</a>
-                      ) : null}
-                      {on ? (
-                        <span className="dshs-mode" onClick={(e) => e.stopPropagation()}>
-                          <button className={'dshs-mode-btn' + (mode === 'auto' ? ' on' : '')} onClick={() => setModes({ ...modes, [it.id]: 'auto' })}>⚡ 自动</button>
-                          <button className={'dshs-mode-btn' + (mode === 'manual' ? ' on' : '')} onClick={() => setModes({ ...modes, [it.id]: 'manual' })}>✋ 手动</button>
-                        </span>
                       ) : null}
                     </div>
                   )
@@ -847,7 +767,7 @@ export function ComboView(props: {
             </button>
             {comboFoot(c, false, sub)}
             {!sub ? (
-              <div className="dshs-subnote">💡 点开成员可挑着下载（=单独安装，不订阅该组）；一键下载整组 = 订阅，作者新增插件将提醒你。✋ 手动安装的成员需自行打开插件页面安装。</div>
+              <div className="dshs-subnote">💡 订阅 = 云端记录、跟踪作者新增；安装请逐条点 🔗 仓库按 README 手动安装（商城不再提供一键安装）。</div>
             ) : null}
           </div>
         )
@@ -937,14 +857,10 @@ export function SubscribeView(props: {
   installed: Installed
   plugins: Plugin[]
   cloud: CloudList
-  installing: Record<string, boolean>
-  onInstallCombo: (name: string) => void
-  onInstallPlugin: (pkg: string) => void
-  onUpdate: (pkg: string) => void
+  onSubscribe: (name: string) => void
   onUnsubscribe: (name: string) => void
   onPushCloud: () => Promise<CloudList>
   onRefreshCloud: () => Promise<CloudList>
-  onRestoreSubs: (combos: string[]) => void
   /** 手动挑选上传（云端已有 + 勾选新增）。 */
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
   /** 从云端删除指定项（仅云端清单，不动本地安装）。 */
@@ -955,9 +871,6 @@ export function SubscribeView(props: {
   const [subOpen, setSubOpen] = useState<Record<string, boolean>>({})
   const [subSelected, setSubSelected] = useState<Record<string, boolean>>({})
   const [csearch, setCsearch] = useState('')
-  // 云端组合选择：组（订阅）与组内插件（安装）分开勾选，跨组同名插件按 pkg 天然去重
-  const [comboGroupsSel, setComboGroupsSel] = useState<Record<string, boolean>>({})
-  const [comboPlugsSel, setComboPlugsSel] = useState<Record<string, boolean>>({})
   // 手动选择上传：本地已订阅但云端没有的组合
   const [comboUpSel, setComboUpSel] = useState<Record<string, boolean>>({})
   const [cloudMsg, setCloudMsg] = useState<string | null>(null)
@@ -974,24 +887,6 @@ export function SubscribeView(props: {
   // 待上传组合：本地已订阅但云端清单里没有的
   const cloudComboSet = new Set(props.cloud.combos)
   const pendingCombos = Object.keys(props.subscriptions).filter((n) => props.subscriptions[n] && !cloudComboSet.has(n))
-  // 恢复所选：订阅选中的组 + 安装单独勾选的插件（跨组去重；已装自动跳过）
-  const restoreSelectedCloud = () => {
-    const gs = Object.keys(comboGroupsSel).filter((n) => comboGroupsSel[n])
-    const ps = Object.keys(comboPlugsSel).filter((p) => comboPlugsSel[p])
-    if (gs.length) props.onRestoreSubs(gs)
-    for (const p of ps) if (!props.installed[p]) props.onInstallPlugin(p)
-    setCloudMsg(`已开始恢复：${gs.length} 个组订阅 + ${ps.length} 个插件`)
-  }
-  // 全部恢复：订阅全部云端组合并安装组内成员（bridge 层对已装成员自动去重）
-  const restoreAllCloud = () => {
-    const ok = window.confirm(
-      '⚠️ 一键全部恢复将订阅云端全部组合，并安装所有组内插件（跨组重复插件会自动跳过）。\n\n' +
-        '建议优先用「恢复所选」按需勾选组/插件。',
-    )
-    if (!ok) return
-    props.onRestoreSubs(props.cloud.combos)
-    setCloudMsg(`已开始恢复 ${props.cloud.combos.length} 个云端组合`)
-  }
 
   return (
     <div>
@@ -1004,20 +899,10 @@ export function SubscribeView(props: {
         </div>
         {cloudOpen ? (
           <div className="dshs-cloudcard-body">
-            <div className="dshs-subnote">云端组合按<b>组</b>展示：勾选组 = 订阅该组；展开后可单独勾选组内<b>插件</b>跨组安装；重复插件自动跳过。</div>
+            <div className="dshs-subnote">云端组合按<b>组</b>展示：订阅/退订在云端或组合库操作；组内<b>插件</b>请点 🔗 仓库按 README 手动安装（一键安装已下线）。</div>
             <div className="dshs-actions" style={{ marginTop: 6 }}>
               <button className="dshs-abtn" onClick={() => { if (!window.confirm('上传全部到云端：云端清单将覆盖为本地全部已装/已订阅项。确定？')) return; setCloudMsg('正在上传本地组合到云端…'); void props.onPushCloud().then((c) => setCloudMsg(`已上传：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>☁ 上传全部到云端</button>
               <button className="dshs-abtn" onClick={() => { setCloudMsg('正在从云端刷新…'); void props.onRefreshCloud().then((c) => setCloudMsg(`云端清单：插件 ${c.plugins.length} · 组合 ${c.combos.length}`)) }}>↻ 从云端刷新</button>
-              {props.installing['restore'] ? (
-                <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
-              ) : (
-                <button className="dshs-abtn pri" onClick={restoreSelectedCloud}>恢复所选</button>
-              )}
-              {props.installing['restore'] ? (
-                <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
-              ) : (
-                <button className="dshs-abtn" onClick={restoreAllCloud}>⚡ 全部恢复（带提醒）</button>
-              )}
               <button
                 className="dshs-abtn dan"
                 onClick={() => {
@@ -1040,16 +925,19 @@ export function SubscribeView(props: {
                 const sub = !!props.subscriptions[name]
                 return (
                   <div className="dshs-pick-sub" key={name}>
-                    <div className="dshs-pick" onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setComboGroupsSel({ ...comboGroupsSel, [name]: !comboGroupsSel[name] }) }}>
-                      <input type="checkbox" checked={!!comboGroupsSel[name]} onChange={() => setComboGroupsSel({ ...comboGroupsSel, [name]: !comboGroupsSel[name] })} />
+                    <div className="dshs-pick">
                       <span className="dshs-nm" style={{ fontWeight: 600 }}>🗂 {name}</span>
                       <span className="dshs-compat" style={{ marginLeft: 0 }}>{members.length} 个插件</span>
                       {sub ? <span className="dshs-pill primary">已订阅</span> : <span className="dshs-pill off">未订阅</span>}
+                      {sub ? (
+                        <button className="dshs-abtn" onClick={() => props.onUnsubscribe(name)}>退订</button>
+                      ) : (
+                        <button className="dshs-abtn" onClick={() => props.onSubscribe(name)}>订阅</button>
+                      )}
                       <button
                         className="dshs-x"
                         title="从云端删除（不影响本地安装）"
-                        onClick={(e) => {
-                          e.stopPropagation()
+                        onClick={() => {
                           if (!window.confirm(`从云端删除组合「${name}」？仅移除云端清单。`)) return
                           setCloudMsg('正在从云端删除…')
                           void props.onDeleteCloud({ combos: [name] }).then(() => setCloudMsg(`已从云端删除：${name}`)).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
@@ -1063,15 +951,11 @@ export function SubscribeView(props: {
                         {members.map((m) => {
                           const p = props.plugins.find((x) => x.id === m.pkg)
                           return (
-                            <div className="dshs-pick" key={m.pkg} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') setComboPlugsSel({ ...comboPlugsSel, [m.pkg]: !comboPlugsSel[m.pkg] }) }}>
-                              <input type="checkbox" checked={!!comboPlugsSel[m.pkg]} onChange={() => setComboPlugsSel({ ...comboPlugsSel, [m.pkg]: !comboPlugsSel[m.pkg] })} />
+                            <div className="dshs-pick" key={m.pkg}>
                               <span className="dshs-nm" style={{ fontWeight: 600 }}>🧩 {p?.name ?? m.pkg}</span>
-                              <span className={'dshs-badge' + (m.install_mode === 'manual' ? ' cm' : '')} title={m.install_mode === 'manual' ? '手动安装：需自行打开插件页面安装' : '一键安装'}>{m.install_mode === 'manual' ? '✋ 手动' : '⚡ 自动'}</span>
                               {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
-                              {p?.repo_url ? (
-                                <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
-                              ) : null}
                               {props.installed[m.pkg] ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+                              {pluginRepoLink(p)}
                             </div>
                           )
                         })}
@@ -1162,7 +1046,8 @@ export function SubscribeView(props: {
                       const up = !!p && hasUpdate(p, props.installed)
                       return (
                         <div className="dshs-mem" key={m.pkg}>
-                          <span className="dshs-nm" style={{ fontWeight: 600 }}>{m.pkg}</span>
+                          <span className="dshs-nm" style={{ fontWeight: 600 }}>{p?.name ?? m.pkg}</span>
+                          {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
                           {p && up ? (
                             <span className="dshs-updot">有更新 v{iv} → v{p.version}</span>
                           ) : iv ? (
@@ -1170,27 +1055,12 @@ export function SubscribeView(props: {
                           ) : (
                             <span className="dshs-compat">未安装</span>
                           )}
-                          {p && up ? (
-                            props.installing[m.pkg] ? (
-                              <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
-                            ) : (
-                              <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onUpdate(m.pkg)}>更新</button>
-                            )
-                          ) : iv ? null : props.installing[m.pkg] ? (
-                            <button className="dshs-abtn" disabled>⏳ 下载中…</button>
-                          ) : (
-                            <button className="dshs-abtn" onClick={() => props.onInstallPlugin(m.pkg)}>下载</button>
-                          )}
+                          {pluginRepoLink(p)}
                         </div>
                       )
                     })}
                   </div>
                   <div className="dshs-mrow">
-                    {props.installing['combo:' + c.name] ? (
-                      <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
-                    ) : (
-                      <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onInstallCombo(c.name)}>一键更新全部</button>
-                    )}
                     <ConfirmDelete label="退订" confirmText="确认退订" onConfirm={() => props.onUnsubscribe(c.name)} />
                   </div>
                 </>
@@ -1212,22 +1082,16 @@ export function MyView(props: {
   installed: Installed
   acked: Record<string, string>
   cloud: CloudList
-  installing: Record<string, boolean>
   onPushCloud: () => Promise<CloudList>
   onRefreshCloud: () => Promise<CloudList>
-  onRestorePlugins: (plugins: string[]) => void
   /** 手动挑选上传（云端已有 + 勾选新增）。 */
   onUploadSelected: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
   /** 从云端删除指定项（仅云端清单，不动本地安装）。 */
   onDeleteCloud: (scope: { plugins?: string[]; agents?: string[]; combos?: string[] }) => Promise<CloudList>
-  onUpdate: (pkg: string) => void
-  onUninstall: (pkg: string) => void
   onAckAll: () => void
 }) {
   const [q, setQ] = useState('')
   const [psearch, setPsearch] = useState('')
-  const [deselected, setDeselected] = useState<Record<string, boolean>>({})
-  const [uninstallSelected, setUninstallSelected] = useState<Record<string, boolean>>({})
   const [cloudMsg, setCloudMsg] = useState<string | null>(null)
   const [cloudOpen, setCloudOpen] = useState(false)
   // 手动选择上传：本地已装但尚未进云端的插件
@@ -1241,41 +1105,24 @@ export function MyView(props: {
   const entries = props.plugins.filter(
     (p) => props.installed[p.id] && (!kw || p.name.toLowerCase().includes(kw) || p.description.toLowerCase().includes(kw)),
   )
-  const selectedUninstall = entries.filter((p) => uninstallSelected[p.id]).map((p) => p.id)
   // 待上传：本地已装（多键，含市场条目）但云端没有的插件
   const cloudPluginSet = new Set(props.cloud.plugins)
   const pendingPlugins = props.plugins.filter((p) => props.installed[p.id] && !cloudPluginSet.has(p.id))
 
-  const toggle = (key: string) => {
-    const next = { ...deselected }
-    if (next[key]) delete next[key]
-    else next[key] = true
-    setDeselected(next)
-  }
-  // 云端插件条目：可勾选恢复；附带作者与仓库地址（手动安装指引）
+  // 云端插件条目：展示作者 + 仓库链接（手动安装指引）
   const cloudRow = (pkg: string) => {
     const p = props.plugins.find((x) => x.id === pkg)
     return (
-      <div
-        className="dshs-pick"
-        key={pkg}
-        onClick={(e) => {
-          if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'A') toggle('p:' + pkg)
-        }}
-      >
-        <input type="checkbox" checked={!deselected['p:' + pkg]} onChange={() => toggle('p:' + pkg)} />
+      <div className="dshs-pick" key={pkg}>
         <span className="dshs-nm" style={{ fontWeight: 600 }}>🧩 {p?.name ?? pkg}</span>
         {p?.author ? <span className="dshs-compat" style={{ marginLeft: 0 }}>👤 {p.author}</span> : null}
-        {p?.repo_url ? (
-          <a className="dshs-lk" href={p.repo_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={p.repo_url}>🔗 仓库</a>
-        ) : null}
-        {p ? null : <span className="dshs-badge ba" title="该插件不在插件库收录范围，无法在插件库搜索到；仅可从云端恢复">库外插件</span>}
+        {p ? null : <span className="dshs-badge ba" title="该插件不在插件库收录范围，无法在插件库搜索到；请从仓库下载">库外插件</span>}
         {props.installed[pkg] ? <span className="dshs-pill primary">已装</span> : <span className="dshs-pill off">未装</span>}
+        {pluginRepoLink(p)}
         <button
           className="dshs-x"
           title="从云端删除（不影响本地安装）"
-          onClick={(e) => {
-            e.stopPropagation()
+          onClick={() => {
             if (!window.confirm(`从云端删除「${p?.name ?? pkg}」？仅移除云端清单，本地安装不受影响。`)) return
             setCloudMsg('正在从云端删除…')
             void props.onDeleteCloud({ plugins: [pkg] }).then(() => setCloudMsg(`已从云端删除：${p?.name ?? pkg}`)).catch((e) => setCloudMsg(`删除失败：${String((e as Error)?.message ?? e)}`))
@@ -1285,23 +1132,6 @@ export function MyView(props: {
         </button>
       </div>
     )
-  }
-  const doRestorePlugins = () => {
-    const ps = props.cloud.plugins.filter((p) => !deselected['p:' + p])
-    props.onRestorePlugins(ps)
-    setCloudMsg(`已开始恢复 ${ps.length} 个云端插件`)
-  }
-  // 全部恢复：弹窗提醒安装方式风险（推荐选择安装；不适用自动安装的手动去官网）
-  const restoreAllPlugins = () => {
-    const ok = window.confirm(
-      '⚠️ 一键全部恢复将依次对每个云端插件执行官方安装命令（dsh plugin add）。\n\n' +
-        '部分插件安装方式多样（手动安装包 / 特殊 Agent 预设等），官方命令可能不适配、恢复会失败。\n\n' +
-        '更稳妥：优先使用「恢复所选」勾选你确认能自动安装的插件；' +
-        '不适配自动安装的，请按条目上的 👤 作者与 🔗 仓库地址手动到官网安装。',
-    )
-    if (!ok) return
-    props.onRestorePlugins(props.cloud.plugins)
-    setCloudMsg(`已开始恢复 ${props.cloud.plugins.length} 个云端插件`)
   }
 
   return (
@@ -1337,16 +1167,6 @@ export function MyView(props: {
               >
                 ↻ 从云端刷新
               </button>
-              {props.installing['restore'] ? (
-                <button className="dshs-abtn pri" disabled>⏳ 恢复中…</button>
-              ) : (
-                <button className="dshs-abtn pri" onClick={doRestorePlugins}>恢复所选</button>
-              )}
-              {props.installing['restore'] ? (
-                <button className="dshs-abtn" disabled>⏳ 恢复中…</button>
-              ) : (
-                <button className="dshs-abtn" onClick={restoreAllPlugins}>⚡ 全部恢复（带提醒）</button>
-              )}
               <button
                 className="dshs-abtn dan"
                 onClick={() => {
@@ -1421,36 +1241,19 @@ export function MyView(props: {
       <div className="dshs-frow">
         <input className="dshs-input" placeholder="搜索已安装插件…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      <BatchDeleteBar
-        count={selectedUninstall.length}
-        itemName="已安装插件"
-        onDelete={() => {
-          selectedUninstall.forEach((id) => props.onUninstall(id))
-          setUninstallSelected({})
-        }}
-        onClear={() => setUninstallSelected({})}
-      />
       {entries.length ? (
         entries.map((p) => (
           <div className="dshs-mem" key={p.id}>
-            <input type="checkbox" checked={!!uninstallSelected[p.id]} onChange={() => setUninstallSelected({ ...uninstallSelected, [p.id]: !uninstallSelected[p.id] })} />
             <span className="dshs-nm" style={{ fontWeight: 600 }}>{p.name}</span>
             <span className="dshs-compat">by {p.author ?? '—'}</span>
             {hasUpdate(p, props.installed)
               ? <span className="dshs-updot">v{props.installed[p.id]} → v{p.version}</span>
               : <span className="dshs-compat">v{p.version} 最新</span>}
-            {hasUpdate(p, props.installed) ? (
-              props.installing[p.id] ? (
-                <button className="dshs-ibtn" style={{ marginLeft: 0 }} disabled>⏳ 更新中…</button>
-              ) : (
-                <button className="dshs-ibtn" style={{ marginLeft: 0 }} onClick={() => props.onUpdate(p.id)}>更新</button>
-              )
-            ) : null}
-            <ConfirmDelete label="卸载" confirmText="确认卸载" className="dshs-x" title={`卸载：dsh plugin remove ${p.id}`} onConfirm={() => props.onUninstall(p.id)} />
+            {pluginRepoLink(p)}
           </div>
         ))
       ) : (
-        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已装插件' : '尚未安装任何插件（可在插件库点击「下载」安装）'}</div>
+        <div className="dshs-empty" style={{ padding: 12 }}>{kw ? '未找到匹配的已装插件' : '尚未安装任何插件（去插件市场查看 🔗 仓库链接手动安装）'}</div>
       )}
     </div>
   )
